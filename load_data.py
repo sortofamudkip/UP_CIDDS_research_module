@@ -35,6 +35,14 @@ def load_data_raw() -> pd.DataFrame:
                     "attackID": "string",
                     "attackDescription": "string",
                 },
+            ).rename(
+                columns={
+                    "Date first seen": "Date_first_seen",
+                    "Src IP Addr": "SrcIP",
+                    "Src Pt": "SrcPt",
+                    "Dst IP Addr": "DstIP",
+                    "Dst Pt": "DstPt",
+                }
             )
             for i in range(1, 4 + 1)
         ]
