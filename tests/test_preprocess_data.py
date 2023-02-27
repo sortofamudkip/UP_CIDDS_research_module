@@ -22,6 +22,8 @@ def test_one_hot_encode_Proto():
 
 
 def test_one_hot_encode_TCP_Flags():
-    flags = pd.Series(["......", ".AP.S.", "UAPRSF"])
-    expected = np.array([[0, 0, 0, 0, 0, 0], [0, 1, 1, 0, 1, 0], [1, 1, 1, 1, 1, 1]])
+    flags = pd.Series(["......", ".AP.S.", "UAPRSF", "...R.."])
+    expected = np.array(
+        [[0, 0, 0, 0, 0, 0], [0, 1, 1, 0, 1, 0], [1, 1, 1, 1, 1, 1], [0, 0, 0, 1, 0, 0]]
+    )
     assert (preprocess_data.one_hot_encode_TCP_Flags(flags) == expected).all()
