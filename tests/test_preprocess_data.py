@@ -27,3 +27,9 @@ def test_one_hot_encode_TCP_Flags():
         [[0, 0, 0, 0, 0, 0], [0, 1, 1, 0, 1, 0], [1, 1, 1, 1, 1, 1], [0, 0, 0, 1, 0, 0]]
     )
     assert (preprocess_data.one_hot_encode_TCP_Flags(flags) == expected).all()
+
+
+def test_scale_ports_1d():
+    ports = pd.Series(range(0, 65535 + 1))
+    expected_output = (ports / 65535).to_numpy().reshape(-1, 1)
+    assert preprocess_data.scale_ports(ports) == pytest.approx(expected_output)
