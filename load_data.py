@@ -61,11 +61,38 @@ def drop_unnecessary_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     return df.drop(
         ["Flows", "Tos", "attackType", "attackID", "attackDescription"], axis=1
+    ).drop(
+        ["SrcIP", "DstIP"], axis=1
+    )  # dropped due to anonymisation and not being useful
+
+
+def _hex_string_to_TCP_flags(hex_str: str):
+    FULL_FLAGS = "UAPRSF"
+    binary_representation = f"{int(hex_str, 16):0>8b}"[2:]
+    TCP_representation = [
+        FULL_FLAGS[i] if binary_representation[i] == "1" else "." for i in range(6)
+    ]
+    return "".join(TCP_representation)
+
+
+def clean_data(dataset):
+    # strip whitespace from protocol number and Bytes
+    dataset.Proto = dataset.Proto.apply(lambda x: x.strip())
+    dataset["Bytes"] = dataset["Bytes"].apply(lambda x: x.strip())
+    dataset["Flags"] = dataset["Flags"].apply(lambda x: x.strip())
+
+    # force DstPt to be int (ICMP's DstPt is float for some reason)
+    dataset["DstPt"] = dataset["DstPt"].astype(int)
+
+    # process the unprocessed flags
+    dataset["Flags"] = dataset["Flags"].apply(
+        lambda flag: _hex_string_to_TCP_flags(flag) if flag.startswith("0x") else flag
     )
+    return dataset
 
 
 def load_data():
-    return drop_unnecessary_columns(load_data_raw())
+    return drop_unnecessary_columns(clean_data(load_data_raw()))
 
 
 if __name__ == "__main__":
