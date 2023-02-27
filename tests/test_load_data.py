@@ -15,6 +15,9 @@ def test_load_data_len():
     [
         ("0xde", ".APRS."),
         ("0xd2", ".A..S."),
+        ("0x0", "......"),
+        ("0x3f", "UAPRSF"),
+        ("0xff", "UAPRSF"),
     ],
 )
 def test_hex_string_to_TCP_flags(hex_str, TCP_string_result):
