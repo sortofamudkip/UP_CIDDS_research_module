@@ -38,3 +38,21 @@ def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
         .to_numpy()
     )
     return return_value
+
+
+def scale_min_max(data: pd.DataFrame) -> np.array:
+    d = (
+        data.to_numpy().reshape(-1, 1)
+        if isinstance(data, pd.Series)
+        else data.to_numpy()
+    )
+    return MinMaxScaler().fit_transform(d)
+
+
+def scale_ports(data: pd.DataFrame) -> np.array:
+    d = (
+        data.to_numpy().reshape(-1, 1)
+        if isinstance(data, pd.Series)
+        else data.to_numpy()
+    )
+    return d / 65535
