@@ -56,3 +56,15 @@ def scale_ports(data: pd.DataFrame) -> np.array:
         else data.to_numpy()
     )
     return d / 65535
+
+
+def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame):
+    minmax_normed = scale_min_max(data[["Duration", "Bytes", "Packets"]])
+    ports_normed = scale_ports(data[["SrcPt", "DstPt"]])
+    onehotencoded_proto = one_hot_encode_Proto(data["Proto"])
+    onehotencoded_flags = one_hot_encode_TCP_Flags(data["Flags"])
+    full_X = np.hstack(
+        [minmax_normed, ports_normed, onehotencoded_proto, onehotencoded_flags]
+    )
+    y = data["class"].to_numpy().reshape(-1, 1)
+    return full_X, y
