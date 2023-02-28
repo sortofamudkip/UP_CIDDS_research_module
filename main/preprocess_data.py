@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
 
 
 def one_hot_encode_Proto(data: pd.Series) -> np.array:
@@ -96,6 +96,12 @@ def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
     full_X = np.hstack(
         [minmax_normed, ports_normed, onehotencoded_proto, onehotencoded_flags]
     )
-    y = subset["class"].to_numpy().reshape(-1, 1)
+    y, y_encoder = _encode_y(subset["class"].to_numpy())
 
-    return full_X, y
+    return full_X, y, y_encoder
+
+
+def _encode_y(y: pd.Series):
+    y_encoder = LabelEncoder().fit(y)
+    y = y_encoder.transform(y)  # to original encoding: y_encoder.inverse_transform(y)
+    return y, y_encoder
