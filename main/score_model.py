@@ -8,13 +8,29 @@ from sklearn.metrics import (
 from pandas import DataFrame
 
 
-def binary_stats(y_true, y_pred):
+def binary_stats(y_true, y_pred, title):
     stats = DataFrame(
         {
-            "accuracy": accuracy_score(y_true, y_pred),
-            "precision": precision_score(y_true, y_pred),
-            "recall": recall_score(y_true, y_pred),
-            "f1_score": f1_score(y_true, y_pred),
-        }
+            "accuracy": [accuracy_score(y_true, y_pred)],
+            "precision": [precision_score(y_true, y_pred)],
+            "recall": [recall_score(y_true, y_pred)],
+            "f1_score": [f1_score(y_true, y_pred)],
+            "confusion_matrix": [confusion_matrix(y_true, y_pred)],
+        },
+        index=[title],
+    )
+    return stats
+
+
+def multiclass_stats(y_true, y_pred, title):
+    stats = DataFrame(
+        {
+            "accuracy": [accuracy_score(y_true, y_pred)],
+            "precision": [precision_score(y_true, y_pred, average="micro")],
+            "recall": [recall_score(y_true, y_pred, average="micro")],
+            "f1_score": [f1_score(y_true, y_pred, average="micro")],
+            "confusion_matrix": [confusion_matrix(y_true, y_pred)],
+        },
+        index=[title],
     )
     return stats

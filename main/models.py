@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 
 
 def y_train_test_split_summary(y, y_train, y_test, y_encoder):
@@ -72,4 +73,13 @@ def knn_train_predict(
 ) -> np.array:
     model = KNeighborsClassifier(n_neighbors=n_neighbors)
     model.fit(X_train, y_train)
+    return model.predict(X_test)
+
+
+def mlp_train_predict(
+    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+) -> np.array:
+    model = MLPClassifier(
+        random_state=1, max_iter=300, early_stopping=False, **kwargs
+    ).fit(X_train, y_train)
     return model.predict(X_test)
