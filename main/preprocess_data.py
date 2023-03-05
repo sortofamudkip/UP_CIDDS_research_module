@@ -3,6 +3,9 @@ import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
 
 
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
+
+
 def one_hot_encode_Proto(data: pd.Series) -> np.array:
     """one-hot encode the Proto column.
     Usage: one_hot_encode_Proto(data["Proto"])
@@ -17,7 +20,9 @@ def one_hot_encode_Proto(data: pd.Series) -> np.array:
     enc = OneHotEncoder()
     enc.fit(protocols)
     # print("categories:", enc.categories_)
-    return enc.transform(protocols).toarray()  # shape: (671241, 4)
+    return enc.transform(protocols).toarray(), list(
+        enc.categories_[0]
+    )  # shape: (671241, 4)
 
 
 def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
@@ -36,7 +41,8 @@ def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
         .applymap(lambda x: 0 if x == "." else 1)
         .to_numpy()
     )
-    return return_value
+    labels = ["isURG", "isACK", "isPSH", "isRES", "isSYN", "isFIN"]
+    return return_value, labels
 
 
 def scale_min_max(data: pd.DataFrame) -> np.array:
@@ -74,7 +80,7 @@ def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
             * These are all flows that access ports/services that are not open to the public, i.e. all other flows.
 
     Returns:
-        list: [full_X, y]
+        list: [full_X, y, y_encoder]
     """
     # if binary labels: drop V, U, S
     to_drop_indices = (
@@ -90,15 +96,27 @@ def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
 
     minmax_normed = scale_min_max(subset[["Duration", "Bytes", "Packets"]])
     ports_normed = scale_ports(subset[["SrcPt", "DstPt"]])
-    # will reduce dims by 2 since A, N only has TCP, UDP
-    onehotencoded_proto = one_hot_encode_Proto(subset["Proto"])
-    onehotencoded_flags = one_hot_encode_TCP_Flags(subset["Flags"])
+    onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+    onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
     full_X = np.hstack(
         [minmax_normed, ports_normed, onehotencoded_proto, onehotencoded_flags]
     )
     y, y_encoder = _encode_y(subset["class"].to_numpy())
 
-    return full_X, y, y_encoder
+    # labels: ["Duration", "Bytes", "Packets", "SrcPt", "DstPt", PROTOCOLS GO HERE, TCP FLAGS GO HERE]
+    labels = (
+        ["Duration", "Bytes", "Packets", "SrcPt", "DstPt"] + proto_labels + flags_labels
+    )
+
+    return full_X, y, y_encoder, labels
+
+
+def get_N_WGAN_GP_preprocessed_dataframe(data, binary_labels=True):
+    full_X, y, y_encoder, labels = get_N_WGAN_GP_preprocessed_data(data, binary_labels)
+    full_dataset = np.hstack([full_X, y.reshape(-1, 1)])
+    full_df = pd.DataFrame(full_dataset, columns=labels + ["class"])
+    full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
+    return full_df
 
 
 def _encode_y(y: pd.Series):
