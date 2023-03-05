@@ -123,3 +123,80 @@ def _encode_y(y: pd.Series):
     y_encoder = LabelEncoder().fit(y)
     y = y_encoder.transform(y)  # to original encoding: y_encoder.inverse_transform(y)
     return y, y_encoder
+
+
+def _to_binary_str(num: int, max_len=16) -> str:
+    return format(num, f"0{max_len}b").zfill(max_len)[-max_len:]
+
+
+def _int_to_binary_cols(col: pd.Series, max_len=16) -> np.array:
+    return (
+        col.apply(lambda val: (_to_binary_str(val, max_len)))
+        .str.split("", expand=True)
+        .loc[:, 1:max_len]
+        .to_numpy()
+        .astype(int)
+    )
+
+
+def get_E_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
+    """given data, preprocess and return using the E_WGAN_GP method.
+
+    Args:
+        data (pd.DataFrame): the dataset.
+        binary_labels (bool): Whether to use only binary labels or not. Defaults to False.
+
+        If binary_labels=True, the following happens:
+        * rows where y="normal" are set to 0.
+        * rows where y="attacker" are set to 1.
+        * rows where y="victim" are dropped.
+        * rows where y="unknown" are dropped.
+            * These are flows where CIDDS were not able to determine the maliciousness of connections going to dest port 80 and 443 (HTTP and HTTPS).
+        * rows where y="suspicious" are dropped.
+            * These are all flows that access ports/services that are not open to the public, i.e. all other flows.
+
+    Returns:
+        list: [full_X, y, y_encoder]
+    """
+    # if binary labels: drop V, U, S
+    to_drop_indices = (
+        data[
+            (data["class"] == "victim")
+            | (data["class"] == "unknown")
+            | (data["class"] == "suspicious")
+        ].index
+        if binary_labels
+        else []
+    )
+    subset = data.drop(to_drop_indices)
+    duration_normed = scale_min_max(subset["Duration"])
+    onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+    source_ports_binary = _int_to_binary_cols(subset["SrcPt"], 16)
+    dest_ports_binary = _int_to_binary_cols(subset["DstPt"], 16)
+    bytes_binary = _int_to_binary_cols(subset["Bytes"], 32)
+    packets_binary = _int_to_binary_cols(subset["Packets"], 32)
+    onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
+
+    full_X = np.hstack(
+        [
+            duration_normed,
+            onehotencoded_proto,
+            source_ports_binary,
+            dest_ports_binary,
+            bytes_binary,
+            packets_binary,
+            onehotencoded_proto,
+            onehotencoded_flags,
+        ]
+    )
+    y, y_encoder = _encode_y(subset["class"].to_numpy())
+    labels = (
+        ["Duration"]
+        + proto_labels
+        + [f"0bSrcPt{i+1}" for i in range(16)]
+        + [f"0bDstPt{i+1}" for i in range(16)]
+        + [f"0bBytes{i+1}" for i in range(32)]
+        + [f"0bPackets{i+1}" for i in range(32)]
+        + flags_labels
+    )
+    return full_X, y, y_encoder, labels
