@@ -20,8 +20,9 @@ def one_hot_encode_Proto(data: pd.Series) -> np.array:
     enc = OneHotEncoder()
     enc.fit(protocols)
     # print("categories:", enc.categories_)
-    return enc.transform(protocols).toarray(), list(
-        enc.categories_[0]
+    return (
+        enc.transform(protocols).toarray(),
+        list(enc.get_feature_names_out(["is"])),
     )  # shape: (671241, 4)
 
 
@@ -41,7 +42,7 @@ def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
         .applymap(lambda x: 0 if x == "." else 1)
         .to_numpy()
     )
-    labels = ["isURG", "isACK", "isPSH", "isRES", "isSYN", "isFIN"]
+    labels = ["is_URG", "is_ACK", "is_PSH", "is_RES", "is_SYN", "is_FIN"]
     return return_value, labels
 
 
@@ -65,6 +66,7 @@ def scale_ports(data: pd.DataFrame) -> np.array:
 
 def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
     """given data, preprocess and return using the N_WGAN_GP method.
+    Usage: X, y, y_encoder, labels = get_N_WGAN_GP_preprocessed_data(data)
 
     Args:
         data (pd.DataFrame): the dataset.

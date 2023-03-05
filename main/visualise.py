@@ -4,7 +4,7 @@ from sklearn.decomposition import PCA
 
 
 def visualise_PCA(
-    X, y, title="Projected dataset using sklearn's PCA(2)", savefig=False
+    X, y, y_encoder, title="Projected dataset using sklearn's PCA(2)", savefig=False
 ) -> None:
     """Given X and y,
     usage:
@@ -28,9 +28,11 @@ def visualise_PCA(
     # plot
     projection_with_labels = pd.DataFrame(projection, columns=["x", "y"])
     projection_with_labels["class"] = y
-    for label in projection_with_labels["class"].unique():
+    labels = projection_with_labels["class"].unique()
+    label_names = y_encoder.inverse_transform(labels)
+    for label, label_name in zip(labels, label_names):
         subset = projection_with_labels[projection_with_labels["class"] == label]
-        plt.scatter(x=subset.x, y=subset.y, label=label, s=1)
+        plt.scatter(x=subset.x, y=subset.y, label=label_name, s=1)
     plt.title(title)
     plt.legend()
     if savefig:
