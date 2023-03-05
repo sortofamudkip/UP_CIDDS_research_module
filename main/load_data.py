@@ -57,7 +57,7 @@ def load_data_raw() -> pd.DataFrame:
             )
             for i in range(1, 4 + 1)
         ]
-    )
+    ).reset_index(drop=True)
     return dataset
 
 
