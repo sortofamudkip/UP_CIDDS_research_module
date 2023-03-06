@@ -36,4 +36,4 @@ def visualise_PCA(
     plt.title(title)
     plt.legend()
     if savefig:
-        plt.savefig()
+        plt.savefig(f"{title}.jpg")
