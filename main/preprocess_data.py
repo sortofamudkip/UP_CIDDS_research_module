@@ -141,7 +141,7 @@ def _int_to_binary_cols(col: pd.Series, max_len=16) -> np.array:
     )
 
 
-def get_E_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
+def get_B_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
     """given data, preprocess and return using the E_WGAN_GP method.
 
     Args:
