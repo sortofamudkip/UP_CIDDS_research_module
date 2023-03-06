@@ -8,13 +8,14 @@ from sklearn.metrics import (
 from pandas import DataFrame
 
 
-def binary_stats(y_true, y_pred, title):
+def binary_stats(y_true, y_pred, title, y_encoder):
+    pos_label = y_encoder.transform(["attacker"])[0]
     stats = DataFrame(
         {
             "accuracy": [accuracy_score(y_true, y_pred)],
-            "precision": [precision_score(y_true, y_pred)],
-            "recall": [recall_score(y_true, y_pred)],
-            "f1_score": [f1_score(y_true, y_pred)],
+            "precision": [precision_score(y_true, y_pred, pos_label=pos_label)],
+            "recall": [recall_score(y_true, y_pred, pos_label=pos_label)],
+            "f1_score": [f1_score(y_true, y_pred, pos_label=pos_label)],
             "confusion_matrix": [confusion_matrix(y_true, y_pred)],
         },
         index=[title],
