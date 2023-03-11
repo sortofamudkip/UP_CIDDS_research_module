@@ -1,8 +1,6 @@
+from datetime import datetime
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
-
-
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
 
 
@@ -62,6 +60,40 @@ def scale_ports(data: pd.DataFrame) -> np.array:
         else data.to_numpy()
     )
     return d / 65535
+
+
+def _preprocess_date_first_seen(dates_first_seen: pd.Series):
+    """process date_first_seen attribute. It's the same for all preprocessing methods.
+    Usage: _preprocess_date_first_seen(dataset.Date_first_seen)
+
+    Args:
+        dates_first_seen (pd.Series): the Date_first_seen column.
+    """
+    day_col_names = [
+        "is_Monday",
+        "is_Tuesday",
+        "is_Wednesday",
+        "is_Thursday",
+        "is_Friday",
+        "is_Saturday",
+        "is_Sunday",
+    ]
+    dates = dates_first_seen.apply(
+        lambda the_date: datetime.strptime(the_date, "%Y-%m-%d %H:%M:%S.%f")
+    )
+    days_of_week = (
+        dates.apply(lambda the_date: day_col_names[the_date.weekday()])
+        .to_numpy()
+        .reshape(-1, 1)
+    )
+    seconds_of_day = (
+        dates.apply(lambda t: t.hour * 60 * 60 + t.minute * 60 + t.second)
+        .to_numpy()
+        .reshape(-1, 1)
+    )
+    enc = OneHotEncoder()
+    enc.fit(days_of_week)
+    return enc.transform(days_of_week).toarray(), enc.categories_, seconds_of_day
 
 
 def _random_IP_addr(random_seed=555, final_digit=0):
