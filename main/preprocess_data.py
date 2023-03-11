@@ -93,7 +93,11 @@ def _preprocess_date_first_seen(dates_first_seen: pd.Series):
     )
     enc = OneHotEncoder()
     enc.fit(days_of_week)
-    return enc.transform(days_of_week).toarray(), enc.categories_, seconds_of_day
+    return (
+        enc.transform(days_of_week).toarray(),
+        list(enc.categories_[0]),
+        seconds_of_day,
+    )
 
 
 def _random_IP_addr(random_seed=555, final_digit=0):
@@ -154,7 +158,9 @@ def _deanonymise_IP(ip: str) -> np.array:
     return _random_IP_addr(front, back)
 
 
-def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
+def get_N_WGAN_GP_preprocessed_data(
+    data: pd.DataFrame, binary_labels=False, include_date_ip=False
+):
     """given data, preprocess and return using the N_WGAN_GP method.
     Usage: X, y, y_encoder, labels = get_N_WGAN_GP_preprocessed_data(data)
 
@@ -193,12 +199,28 @@ def get_N_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
     full_X = np.hstack(
         [minmax_normed, ports_normed, onehotencoded_proto, onehotencoded_flags]
     )
-    y, y_encoder = _encode_y(subset["class"].to_numpy())
-
     # labels: ["Duration", "Bytes", "Packets", "SrcPt", "DstPt", PROTOCOLS GO HERE, TCP FLAGS GO HERE]
     labels = (
         ["Duration", "Bytes", "Packets", "SrcPt", "DstPt"] + proto_labels + flags_labels
     )
+
+    if include_date_ip:  # when including date and ip, fetch their columns as well
+        ips = (
+            subset["SrcIP"]
+            .apply(_deanonymise_IP)
+            .str.split(".", expand=True)
+            .to_numpy(dtype=np.int16)
+            / 255
+        )
+        (
+            onehotencoded_days_of_week,
+            days_of_week_labels,
+            seconds_normed,
+        ) = _preprocess_date_first_seen(subset["Date_first_seen"])
+        full_X = np.hstack([full_X, ips, onehotencoded_days_of_week, seconds_normed])
+        labels += ["IP1", "IP2", "IP3", "IP4"] + days_of_week_labels + ["day_seconds"]
+
+    y, y_encoder = _encode_y(subset["class"].to_numpy())
 
     return full_X, y, y_encoder, labels
 
