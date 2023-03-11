@@ -61,20 +61,25 @@ def load_data_raw() -> pd.DataFrame:
     return dataset
 
 
-def drop_unnecessary_columns(df: pd.DataFrame) -> pd.DataFrame:
+def drop_unnecessary_columns(df: pd.DataFrame, drop_date_IP: bool) -> pd.DataFrame:
     """Drops unnecessary columns from dataset.
 
     Args:
         df (pd.DataFrame): original dataset.
+        drop_date_IP (bool): drop SrcIP, DstIP, Date_first_seen
 
     Returns:
         pd.DataFrame: new dataset.
     """
-    return df.drop(
+    data = df.drop(
         ["Flows", "Tos", "attackType", "attackID", "attackDescription"], axis=1
-    ).drop(
-        ["SrcIP", "DstIP", "Date_first_seen"], axis=1
-    )  # dropped due to anonymisation and not being useful
+    )
+    # dropped due to anonymisation and not being useful
+    return (
+        data.drop(["SrcIP", "DstIP", "Date_first_seen"], axis=1)
+        if drop_date_IP
+        else data
+    )
 
 
 def _hex_string_to_TCP_flags(hex_str: str):
@@ -113,8 +118,8 @@ def clean_data(dataset):
     return dataset
 
 
-def load_data():
-    return drop_unnecessary_columns(clean_data(load_data_raw()))
+def load_data(drop_date_IP):
+    return drop_unnecessary_columns(clean_data(load_data_raw()), drop_date_IP)
 
 
 if __name__ == "__main__":
