@@ -89,12 +89,13 @@ def _random_IP_addr(random_seed=555, final_digit=0):
     return np.array([first_num, second_num, third_num, final_digit], dtype=np.int16)
 
 
-def _deanonymise_IP(ip: pd.Series) -> np.array:
+def _deanonymise_IP(ip: str) -> np.array:
     """convert anonymised IPs to ip strings.
     Ex: EXT_SERVER, OPENSTACK_NET, 39832_109 etc.
+    Usage: dataset["SrcIP"].apply(_deanonymise_IP)
 
     Args:
-        ip (pd.Series): the anonymised IP series.
+        ip (str): the anonymised IP string.
 
     Returns:
         np.array: the denonymised IP as its 4 bytes.
