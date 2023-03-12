@@ -90,7 +90,7 @@ def _preprocess_date_first_seen(dates_first_seen: pd.Series):
         dates.apply(lambda t: t.hour * 60 * 60 + t.minute * 60 + t.second)
         .to_numpy()
         .reshape(-1, 1)
-    )
+    ) / 86400
     enc = OneHotEncoder()
     enc.fit(days_of_week)
     return (
@@ -122,19 +122,18 @@ def _random_IP_addr(random_seed=555, final_digit=0):
     second_num = rng.choice(list(second_num_choices))
     third_num = rng.integers(0, 255 + 1)
     # fourth_num = rng.integers(0,255+1)
-    return np.array([first_num, second_num, third_num, final_digit], dtype=np.int16)
+    return f"{first_num}.{second_num}.{third_num}.{final_digit}"
 
 
-def _deanonymise_IP(ip: str) -> np.array:
+def _deanonymise_IP(ip: str) -> list:
     """convert anonymised IPs to ip strings.
     Ex: EXT_SERVER, OPENSTACK_NET, 39832_109 etc.
-    Usage: dataset["SrcIP"].apply(_deanonymise_IP)
 
     Args:
-        ip (str): the anonymised IP string.
+        ip (str): the anonymised IP.
 
     Returns:
-        np.array: the denonymised IP as its 4 bytes.
+        list: the denonymised IP as its 4 bytes.
     """
     if ip == "EXT_SERVER":
         ip = f"555_127"
@@ -150,9 +149,7 @@ def _deanonymise_IP(ip: str) -> np.array:
         ip = f"333_2"
     front_back = ip.split("_")
     if len(front_back) == 1:
-        return np.array(
-            [int(i) for i in ip.split(".")], dtype=np.int16
-        )  # already an ip address
+        return ip  # already an ip address
     front, back = int(front_back[0]), int(front_back[1])
     # use the front value as seed, so that unique values always map to the same randomly-generated IP.
     return _random_IP_addr(front, back)
