@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
@@ -6,7 +6,8 @@ from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
 
 def one_hot_encode_Proto(data: pd.Series) -> np.array:
     """one-hot encode the Proto column.
-    Usage: one_hot_encode_Proto(data["Proto"])
+    Usage: onehotencoded_enc, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+
 
     Args:
         data (pd.Series): The series as indexed by data["Proto"].
@@ -19,9 +20,10 @@ def one_hot_encode_Proto(data: pd.Series) -> np.array:
     enc.fit(protocols)
     # print("categories:", enc.categories_)
     return (
+        enc,
         enc.transform(protocols).toarray(),
         list(enc.get_feature_names_out(["is"])),
-    )  # shape: (671241, 4)
+    )
 
 
 def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
@@ -45,12 +47,25 @@ def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
 
 
 def scale_min_max(data: pd.DataFrame) -> np.array:
+    """wrapper for min max scaler.
+    Usage:
+        scale: scaler, scaled = scale_min_max(data["Duration"])
+        unscale: scaler.inverse_transform(scaled)
+    Args:
+        data (pd.DataFrame): a Series or multiple cols.
+
+    Returns:
+        np.array: Scaler.
+        np.array: Scaled.
+    """
     d = (
         data.to_numpy().reshape(-1, 1)
         if isinstance(data, pd.Series)
         else data.to_numpy()
     )
-    return MinMaxScaler().fit_transform(d)
+    scaler = MinMaxScaler()
+    scaled = scaler.fit_transform(d)
+    return scaler, scaled
 
 
 def scale_ports(data: pd.DataFrame) -> np.array:
@@ -87,13 +102,16 @@ def _preprocess_date_first_seen(dates_first_seen: pd.Series):
         .reshape(-1, 1)
     )
     seconds_of_day = (
-        dates.apply(lambda t: t.hour * 60 * 60 + t.minute * 60 + t.second)
+        dates.apply(
+            lambda t: t.hour * 60 * 60 + t.minute * 60 + t.second
+        )  # ignore miliseconds
         .to_numpy()
         .reshape(-1, 1)
     ) / 86400
     enc = OneHotEncoder()
     enc.fit(days_of_week)
     return (
+        enc,
         enc.transform(days_of_week).toarray(),
         list(enc.categories_[0]),
         seconds_of_day,
@@ -155,6 +173,110 @@ def _deanonymise_IP(ip: str) -> list:
     return _random_IP_addr(front, back)
 
 
+def _process_N_WGAN_GP_ips(column: pd.Series):
+    """IPs to N_WGAN_GP format (i.e. normalise the 4 bytes individually).
+    usage:
+
+    Args:
+        column (pd.Series): the series.
+
+    Returns:
+        _type_: _description_
+    """
+    return (
+        column.apply(_deanonymise_IP)
+        .str.split(".", expand=True)
+        .to_numpy(dtype=np.int16)
+        / 255
+    )
+
+
+def decode_TCP_flags_one(*six_flags):
+    full_flags = "UAPRSF"
+    flag = [full_flags[i] if six_flags[i] > 0.5 else "." for i in range(6)]
+    return "".join(flag)
+
+
+def decode_IP_N_WGAN_GP(four_cols):
+    temp = (four_cols * 255).astype(int).astype(str)
+    return temp.agg(lambda x: ".".join(x), axis=1)
+
+
+def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
+    full_dataset = np.hstack([X, y.reshape(-1, 1)])
+    full_df = pd.DataFrame(full_dataset, columns=labels + ["class"])
+
+    # decode Duration, Bytes and Packets
+    Duration_Bytes_Packets = X_encoders["Duration_Bytes_Packets"].inverse_transform(
+        full_df[["Duration", "Bytes", "Packets"]]
+    )
+    full_df["Duration"] = Duration_Bytes_Packets[:, 0]
+    full_df["Bytes"] = Duration_Bytes_Packets[:, 1].astype(int)
+    full_df["Packets"] = Duration_Bytes_Packets[:, 2].astype(int)
+
+    # decode ports
+    full_df[["SrcPt", "DstPt"]] = (full_df[["SrcPt", "DstPt"]] * 65535).astype(int)
+
+    # decode protocols
+    proto_names = ["is_" + p for p in X_encoders["Protocols"].categories_[0]]
+    full_df["Proto"] = X_encoders["Protocols"].inverse_transform(full_df[proto_names])
+    full_df.drop(proto_names, axis=1, inplace=True)
+
+    # decode TCP flags
+    flag_names = ["is_URG", "is_ACK", "is_PSH", "is_RES", "is_SYN", "is_FIN"]
+    full_df["Flags"] = full_df[flag_names].apply(
+        lambda x: decode_TCP_flags_one(*x), axis=1
+    )
+    full_df.drop(flag_names, axis=1, inplace=True)
+
+    # decode SrcIP
+    src_ip_names = ["srcIP1", "srcIP2", "srcIP3", "srcIP4"]
+    full_df["SrcIP"] = decode_IP_N_WGAN_GP(full_df[src_ip_names])
+    full_df.drop(src_ip_names, axis=1, inplace=True)
+
+    # decode DstIP
+    dst_ip_names = ["dstIP1", "dstIP2", "dstIP3", "dstIP4"]
+    full_df["DstIP"] = decode_IP_N_WGAN_GP(full_df[dst_ip_names])
+    full_df.drop(dst_ip_names, axis=1, inplace=True)
+
+    full_df["day_seconds"] *= 86400
+    time_to_str = full_df["day_seconds"].apply(
+        lambda x: str(timedelta(seconds=round(x)))
+    )
+    # decode Date_First_seen
+    days_names = X_encoders["Date_first_seen"].categories_[0]
+    full_df["Date_first_seen"] = X_encoders["Date_first_seen"].inverse_transform(
+        full_df[days_names]
+    )
+
+    full_df["Date_first_seen"] = (
+        full_df["Date_first_seen"].apply(lambda x: x[3:]) + " " + time_to_str
+    )  # x[3:] should be removeprefix("is_")
+    full_df.drop(days_names, axis=1, inplace=True)
+    full_df.drop("day_seconds", axis=1, inplace=True)
+
+    # decode class
+    full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
+
+    # rearrange classes
+    full_df = full_df[
+        [
+            "Date_first_seen",
+            "Duration",
+            "Proto",
+            "SrcIP",
+            "SrcPt",
+            "DstIP",
+            "DstPt",
+            "Packets",
+            "Bytes",
+            "Flags",
+            "class",
+        ]
+    ]
+    return full_df
+
+
 def get_N_WGAN_GP_preprocessed_data(
     data: pd.DataFrame, binary_labels=False, include_date_ip=False
 ):
@@ -189,37 +311,53 @@ def get_N_WGAN_GP_preprocessed_data(
     )
     subset = data.drop(to_drop_indices)
 
-    minmax_normed = scale_min_max(subset[["Duration", "Bytes", "Packets"]])
+    dur_bytes_packets_scaler, dur_bytes_packets_scaled = scale_min_max(
+        subset[["Duration", "Bytes", "Packets"]]
+    )
     ports_normed = scale_ports(subset[["SrcPt", "DstPt"]])
-    onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+    enc_proto, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
     onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
     full_X = np.hstack(
-        [minmax_normed, ports_normed, onehotencoded_proto, onehotencoded_flags]
+        [
+            dur_bytes_packets_scaled,
+            ports_normed,
+            onehotencoded_proto,
+            onehotencoded_flags,
+        ]
     )
     # labels: ["Duration", "Bytes", "Packets", "SrcPt", "DstPt", PROTOCOLS GO HERE, TCP FLAGS GO HERE]
     labels = (
         ["Duration", "Bytes", "Packets", "SrcPt", "DstPt"] + proto_labels + flags_labels
     )
+    encoders = {
+        "Duration_Bytes_Packets": dur_bytes_packets_scaler,
+        "Protocols": enc_proto,
+    }
 
-    if include_date_ip:  # when including date and ip, fetch their columns as well
-        ips = (
-            subset["SrcIP"]
-            .apply(_deanonymise_IP)
-            .str.split(".", expand=True)
-            .to_numpy(dtype=np.int16)
-            / 255
-        )
+    # when including date and ip, fetch their columns as well (always yes for GANs)
+    if include_date_ip:
+        src_ips = _process_N_WGAN_GP_ips(subset["SrcIP"])
+        dest_ips = _process_N_WGAN_GP_ips(subset["DstIP"])
         (
+            enc_date_first_seen,
             onehotencoded_days_of_week,
             days_of_week_labels,
             seconds_normed,
         ) = _preprocess_date_first_seen(subset["Date_first_seen"])
-        full_X = np.hstack([full_X, ips, onehotencoded_days_of_week, seconds_normed])
-        labels += ["IP1", "IP2", "IP3", "IP4"] + days_of_week_labels + ["day_seconds"]
+        full_X = np.hstack(
+            [full_X, src_ips, dest_ips, onehotencoded_days_of_week, seconds_normed]
+        )
+        labels += (
+            [f"srcIP{i}" for i in range(1, 5)]
+            + [f"dstIP{i}" for i in range(1, 5)]
+            + days_of_week_labels
+            + ["day_seconds"]
+        )
+        encoders["Date_first_seen"] = enc_date_first_seen
 
     y, y_encoder = _encode_y(subset["class"].to_numpy())
 
-    return full_X, y, y_encoder, labels
+    return full_X, y, y_encoder, labels, encoders
 
 
 def get_N_WGAN_GP_preprocessed_dataframe(data, binary_labels=True):
@@ -250,7 +388,9 @@ def _int_to_binary_cols(col: pd.Series, max_len=16) -> np.array:
     )
 
 
-def get_B_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
+def get_B_WGAN_GP_preprocessed_data(
+    data: pd.DataFrame, binary_labels=False, include_date_ip=False
+):
     """given data, preprocess and return using the E_WGAN_GP method.
 
     Args:
@@ -310,4 +450,23 @@ def get_B_WGAN_GP_preprocessed_data(data: pd.DataFrame, binary_labels=False):
         + [f"0bPackets{i+1}" for i in range(32)]
         + flags_labels
     )
+
+    if include_date_ip:  # when including date and ip, fetch their columns as well
+        src_ips = _process_N_WGAN_GP_ips(subset["SrcIP"])
+        dest_ips = _process_N_WGAN_GP_ips(subset["DstIP"])
+        (
+            onehotencoded_days_of_week,
+            days_of_week_labels,
+            seconds_normed,
+        ) = _preprocess_date_first_seen(subset["Date_first_seen"])
+        full_X = np.hstack(
+            [full_X, src_ips, dest_ips, onehotencoded_days_of_week, seconds_normed]
+        )
+        labels += (
+            [f"srcIP{i}" for i in range(1, 5)]
+            + [f"dstIP{i}" for i in range(1, 5)]
+            + days_of_week_labels
+            + ["day_seconds"]
+        )
+
     return full_X, y, y_encoder, labels
