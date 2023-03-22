@@ -8,7 +8,7 @@ class GenericPipeline(ABC):
 
         Args:
             filename (str): file name. File should contain X, y, y_encoder, labels, X_encoders.
-            subset (float|None, optional): Portion of random samples to use. Set to None to use all. Defaults to 0.05.
+            subset (float|None, optional): Portion of random samples to use. Set to False to use all. Defaults to 0.05.
             batch_size (int, optional): batch size to use. Defaults to 32.
 
         Returns:
