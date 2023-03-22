@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
-from abstract import GenericPipeline
+from .abstract import GenericPipeline
 import pickle
 import numpy as np
 import pandas as pd
@@ -103,9 +103,9 @@ class BasicGANPipeline(GenericPipeline):
         GenericPipeline (_type_): _description_
     """
 
-    def __init__(self) -> None:
+    def __init__(self, dataset_filename) -> None:
         super().__init__()
-        train_loader, num_cols = self.load_data("./preprocessed/X_y_5_classes_N")
+        train_loader, num_cols = self.load_data(dataset_filename)
         self.dataset = train_loader
         self.num_cols = num_cols
         self.discriminator = self.get_discriminator()
