@@ -173,6 +173,20 @@ def _deanonymise_IP(ip: str) -> list:
     return _random_IP_addr(front, back)
 
 
+# list of special anonymised IPs.
+ANONYMISED_NAMED_IPS = {
+    name: _deanonymise_IP(name)
+    for name in [
+        "EXT_SERVER",
+        "OPENSTACK_NET",
+        "DNS",
+        "ATTACKER1",
+        "ATTACKER2",
+        "ATTACKER3",
+    ]
+}
+
+
 def _process_N_WGAN_GP_ips(column: pd.Series):
     """IPs to N_WGAN_GP format (i.e. normalise the 4 bytes individually).
     usage:
