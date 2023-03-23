@@ -4,6 +4,7 @@ import re
 # example usage:
 #   data = pd.read_csv('external_denonymisedIPs.csv.zip', compression='zip', index_col=0)
 
+
 ############################################################
 #                                                          #
 #    These tests pass (score 100%) on external dataset     #
@@ -115,7 +116,7 @@ def score_normal_dns_is_UDP(data: pd.DataFrame) -> float:
 
 ############################################################
 #                                                          #
-#                   Auxilliary functions                   #
+#             Auxilliary functions / constants             #
 #                                                          #
 ############################################################
 
@@ -127,3 +128,12 @@ def _validate_ipv4(ip: str) -> bool:
     if len(m.groups()) != 4:
         return False
     return all(0 <= int(quartet) <= 255 for quartet in ip.split("."))
+
+
+LIST_OF_REALISTIC_DATASET_TESTS = [
+    score_normal_http_is_tcp,
+    score_packet_size,
+    score_IPs_in_range,
+    score_numerics_valid,
+    score_ports_valid,
+]
