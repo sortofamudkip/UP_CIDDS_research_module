@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import numpy as np
 
 # example usage:
 #   data = pd.read_csv('external_denonymisedIPs.csv.zip', compression='zip', index_col=0)
@@ -130,10 +131,23 @@ def _validate_ipv4(ip: str) -> bool:
     return all(0 <= int(quartet) <= 255 for quartet in ip.split("."))
 
 
-LIST_OF_REALISTIC_DATASET_TESTS = [
-    score_normal_http_is_tcp,
-    score_packet_size,
-    score_IPs_in_range,
-    score_numerics_valid,
-    score_ports_valid,
-]
+LIST_OF_REALISTIC_DATASET_TESTS = {
+    "score_normal_http_is_tcp": score_normal_http_is_tcp,
+    "score_packet_size": score_packet_size,
+    "score_IPs_in_range": score_IPs_in_range,
+    "score_numerics_valid": score_numerics_valid,
+    "score_ports_valid": score_ports_valid,
+}
+
+
+def score_data_realness_detailed(data):
+    report = {
+        scorename: [scorefunc(data)]
+        for scorename, scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.items()
+    }
+    return pd.DataFrame(report)
+
+
+def score_data_realness_single(data):
+    report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
+    return np.array(report).mean()
