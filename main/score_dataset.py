@@ -140,7 +140,7 @@ LIST_OF_REALISTIC_DATASET_TESTS = {
 }
 
 
-def score_data_realness_detailed(data):
+def score_data_plausibility_detailed(data):
     report = {
         scorename: [scorefunc(data)]
         for scorename, scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.items()
@@ -148,6 +148,23 @@ def score_data_realness_detailed(data):
     return pd.DataFrame(report)
 
 
-def score_data_realness_single(data):
+def score_data_plausibility_single(data):
     report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
     return np.array(report).mean()
+
+
+class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
+    """
+    A Keras callback that generates a fake dataset using the Generator
+    and then evaluates how plausible to would be based on the score_data_realness_single() score.
+    This callback only runs at the end of each epoch.
+    Usage:
+    self.gan.fit(self.dataset, epochs=epochs, callbacks=[EvaluateSyntheticDataRealisticnessCallback(model, x_test, y_test)])
+    """
+
+    def __init__(self, model):
+        self.model = model
+
+    def on_epoch_end(self, epoch, logs={}):
+        y_pred = self.model.predict(self.x_test, self.y_test)
+        print("y predicted: ", y_pred)

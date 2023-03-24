@@ -4,6 +4,7 @@ from .abstract import GenericPipeline
 import pickle
 import numpy as np
 import pandas as pd
+from ..score_dataset import EvaluateSyntheticDataRealisticnessCallback
 
 
 class BasicGAN(keras.Model):
