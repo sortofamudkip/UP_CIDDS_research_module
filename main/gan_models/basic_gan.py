@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from ..score_dataset import EvaluateSyntheticDataRealisticnessCallback
+from ..preprocess_data import decode_N_WGAN_GP
 
 
 class BasicGAN(keras.Model):
@@ -119,6 +120,8 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         with open(filename, "rb") as f:
             X, y, y_encoder, labels, X_encoders = pickle.load(f)
+            self.dataset_columns = labels
+            self.X_encoders = X_encoders
 
         # these two lines should be in the CGAN
         # y_enc = OneHotEncoder()
@@ -190,7 +193,18 @@ class BasicGANPipeline(GenericPipeline):
             g_optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
             loss_fn=keras.losses.BinaryCrossentropy(),
         )
-        self.gan.fit(self.dataset, epochs=epochs)
+        self.gan.fit(
+            self.dataset,
+            epochs=epochs,
+            callbacks=[
+                EvaluateSyntheticDataRealisticnessCallback(
+                    self.gan,
+                    generate_samples_func=self.generate_samples,
+                    num_samples_to_generate=100,
+                    decoder_func=self.decode_samples,
+                )
+            ],
+        )
 
     def generate_samples(self, num_samples: int, **kwargs):
         latent_space_samples = tf.random.normal(
@@ -199,7 +213,13 @@ class BasicGANPipeline(GenericPipeline):
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples
 
-    def decode_samples(self):
-        pass
+    def decode_samples(self, generated_samples):
+        return decode_N_WGAN_GP(
+            generated_samples,
+            None,
+            None,
+            self.dataset_columns,
+            self.X_encoders,
+        )
         # fake_y = np.zeros(num_samples).reshape(-1,1) # all 0s since we don't care atm
         # preprocessor.decode_N_WGAN_GP(X=generated_samples, y=fake_y, y_encoder=y_encoder, labels=labels, X_encoders=X_encoders)
