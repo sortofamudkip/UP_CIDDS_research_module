@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import numpy as np
+from tensorflow import keras
 
 # example usage:
 #   data = pd.read_csv('external_denonymisedIPs.csv.zip', compression='zip', index_col=0)
@@ -150,7 +151,8 @@ def score_data_plausibility_detailed(data):
 
 def score_data_plausibility_single(data):
     report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
-    return np.array(report).mean()
+    report = [score for score in report if not (score is None or score is False)]
+    return np.nanmean(np.array(report))
 
 
 class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
@@ -162,9 +164,16 @@ class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
     self.gan.fit(self.dataset, epochs=epochs, callbacks=[EvaluateSyntheticDataRealisticnessCallback(model, x_test, y_test)])
     """
 
-    def __init__(self, model):
+    def __init__(
+        self, model, generate_samples_func, num_samples_to_generate, decoder_func
+    ):
         self.model = model
+        self.generate_samples_func = generate_samples_func
+        self.num_samples_to_generate = num_samples_to_generate
+        self.decoder_func = decoder_func
 
     def on_epoch_end(self, epoch, logs={}):
-        y_pred = self.model.predict(self.x_test, self.y_test)
-        print("y predicted: ", y_pred)
+        # print(f"epoch {epoch}, logs {logs}, model {self.model}")
+        generated_samples = self.generate_samples_func(self.num_samples_to_generate)
+        decoded = self.decoder_func(generated_samples)
+        print(f", realistic dataset score: {score_data_plausibility_single(decoded)}")
