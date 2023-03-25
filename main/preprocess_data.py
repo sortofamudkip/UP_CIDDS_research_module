@@ -217,8 +217,21 @@ def decode_IP_N_WGAN_GP(four_cols):
 
 
 def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
-    full_dataset = np.hstack([X, y.reshape(-1, 1)])
-    full_df = pd.DataFrame(full_dataset, columns=labels + ["class"])
+    """Given X and y and their encoders, decode the data into traffic flow.
+    If y is None, then only the X is decoded; in this case, y and y_encoder are ignored.
+
+    Args:
+        X (np.array): X.
+        y (np.array | None): y. Set to None to ignore.
+        y_encoder (_type_): _description_
+        labels (_type_): _description_
+        X_encoders (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    full_dataset = np.hstack([X, y.reshape(-1, 1)]) if y else X
+    full_df = pd.DataFrame(full_dataset, columns=(labels + ["class"] if y else labels))
 
     # decode Duration, Bytes and Packets
     Duration_Bytes_Packets = X_encoders["Duration_Bytes_Packets"].inverse_transform(
@@ -270,7 +283,8 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
     full_df.drop("day_seconds", axis=1, inplace=True)
 
     # decode class
-    full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
+    if y:
+        full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
 
     # rearrange classes
     full_df = full_df[
@@ -285,8 +299,8 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
             "Packets",
             "Bytes",
             "Flags",
-            "class",
         ]
+        + (["class"] if y else [])
     ]
     return full_df
 
