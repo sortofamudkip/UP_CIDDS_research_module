@@ -14,6 +14,7 @@ from tensorflow import keras
 ############################################################
 
 
+# "Test  (Ring et al 2018)"
 def score_normal_http_is_tcp(data: pd.DataFrame) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
@@ -40,8 +41,13 @@ def score_packet_size(data: pd.DataFrame) -> float:
     ]
     if len(subset) == 0:
         return False
-    packets = subset.Packets.astype(np.int64)
-    condition = ((20 * packets) <= subset.Bytes) & (subset.Bytes <= (65535 * packets))
+    Packets = subset.Packets.astype(np.int64)
+    Bytes = subset.Bytes
+    condition = (
+        ((Packets > 0) & (Bytes > 0))
+        & ((20 * Packets) <= Bytes)
+        & (Bytes <= (65535 * Packets))
+    )
     # return subset[ ~condition ][ ["Packets", "Bytes", "class"] ]
     return condition.sum() / len(subset)
 
@@ -94,6 +100,7 @@ def score_ports_valid(data: pd.DataFrame) -> float:
 ############################################################
 
 
+# "Test 1 (Ring et al 2018)"
 def score_if_udp_no_tcp_flags(data: pd.DataFrame) -> float:
     if not all(col in data.columns for col in ("Proto", "class", "Flags")):
         return None  # skip test
@@ -104,6 +111,7 @@ def score_if_udp_no_tcp_flags(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
+# "Test 4 (Ring et al 2018)"
 def score_normal_dns_is_UDP(data: pd.DataFrame) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
@@ -151,6 +159,9 @@ def score_data_plausibility_detailed(data):
 
 def score_data_plausibility_single(data):
     report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
+    print(
+        f"\nreport:\n\t{[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
+    )
     report = [score for score in report if not (score is None or score is False)]
     return np.nanmean(np.array(report))
 
@@ -176,4 +187,5 @@ class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
         # print(f"epoch {epoch}, logs {logs}, model {self.model}")
         generated_samples = self.generate_samples_func(self.num_samples_to_generate)
         decoded = self.decoder_func(generated_samples)
-        print(f", realistic dataset score: {score_data_plausibility_single(decoded)}")
+        score = score_data_plausibility_single(decoded)
+        print(f"\trealistic dataset score: {score}")

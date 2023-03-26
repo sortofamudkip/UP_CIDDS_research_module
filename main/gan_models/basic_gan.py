@@ -105,8 +105,10 @@ class BasicGANPipeline(GenericPipeline):
         GenericPipeline (_type_): _description_
     """
 
-    def __init__(self, dataset_filename) -> None:
+    def __init__(self, dataset_filename, subset=0.25, batch_size=128) -> None:
         super().__init__()
+        self.subset = subset
+        self.batch_size = batch_size
         train_loader, num_cols = self.load_data(dataset_filename)
         self.dataset = train_loader
         self.num_cols = num_cols
@@ -114,27 +116,25 @@ class BasicGANPipeline(GenericPipeline):
         self.generator = self.get_generator()
         self.gan = self.get_GAN()
 
-    def load_data(self, filename: str, subset=0.05, batch_size=32):
+    def load_data(self, filename: str):
         ################################
         #    Loading data from file    #
         ################################
         with open(filename, "rb") as f:
+            # TODO: add y into dataset as well!!
             X, y, y_encoder, labels, X_encoders = pickle.load(f)
             self.dataset_columns = labels
             self.X_encoders = X_encoders
 
-        # these two lines should be in the CGAN
-        # y_enc = OneHotEncoder()
-        # y_onehot = y_enc.fit_transform(y.reshape(-1,1)).todense()
         full_dataset = X
         full_dataset = full_dataset.astype(np.float32)
 
         ################################
         #     Subset to save time      #
         ################################
-        if subset is not False:
+        if self.subset is not False:
             idx = np.random.randint(
-                full_dataset.shape[0], size=int(full_dataset.shape[0] * subset)
+                full_dataset.shape[0], size=int(full_dataset.shape[0] * self.subset)
             )
             sampled_dataset = full_dataset[idx, :]
         else:
@@ -148,7 +148,7 @@ class BasicGANPipeline(GenericPipeline):
 
         # dataset = tf.data.Dataset.from_tensor_slices( (sampled_dataset, np.zeros(sampled_dataset.shape[0]) ))
         dataset = tf.data.Dataset.from_tensor_slices(sampled_dataset)
-        dataset = dataset.shuffle(buffer_size=1024).batch(batch_size)
+        dataset = dataset.shuffle(buffer_size=8192).batch(self.batch_size)
         return dataset, sampled_dataset.shape[1]
 
     def get_discriminator(self):
@@ -157,11 +157,11 @@ class BasicGANPipeline(GenericPipeline):
                 keras.layers.Dense(
                     256, activation="relu", input_shape=(self.num_cols,)
                 ),
-                keras.layers.Dropout(0.3),
+                keras.layers.Dropout(0.15),
                 keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dropout(0.3),
-                keras.layers.Dense(64, activation="relu"),
-                keras.layers.Dropout(0.3),
+                keras.layers.Dropout(0.15),
+                keras.layers.Dense(128, activation="relu"),
+                keras.layers.Dropout(0.15),
                 keras.layers.Dense(1, activation="sigmoid"),  # is real or fake
             ],
             name="discriminator",
@@ -171,8 +171,10 @@ class BasicGANPipeline(GenericPipeline):
     def get_generator(self):
         generator = keras.Sequential(
             [
-                keras.layers.Dense(16, activation="relu", input_shape=(self.num_cols,)),
-                keras.layers.Dense(32, activation="relu"),
+                keras.layers.Dense(64, activation="relu", input_shape=(self.num_cols,)),
+                keras.layers.Dense(64, activation="relu"),
+                keras.layers.Dense(64, activation="relu"),
+                keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(self.num_cols),  # number of features
             ],
             name="generator",
@@ -200,7 +202,7 @@ class BasicGANPipeline(GenericPipeline):
                 EvaluateSyntheticDataRealisticnessCallback(
                     self.gan,
                     generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=100,
+                    num_samples_to_generate=500,
                     decoder_func=self.decode_samples,
                 )
             ],

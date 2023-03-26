@@ -1,7 +1,12 @@
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelEncoder
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    MinMaxScaler,
+    LabelEncoder,
+    LabelBinarizer,
+)
 
 
 def one_hot_encode_Proto(data: pd.Series) -> np.array:
@@ -224,14 +229,18 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
         X (np.array): X.
         y (np.array | None): y. Set to None to ignore.
         y_encoder (_type_): _description_
-        labels (_type_): _description_
+        labels (list): the list of labels.
         X_encoders (_type_): _description_
 
     Returns:
         _type_: _description_
     """
-    full_dataset = np.hstack([X, y.reshape(-1, 1)]) if y else X
-    full_df = pd.DataFrame(full_dataset, columns=(labels + ["class"] if y else labels))
+    is_decode_y = True if y is not None else False
+    full_dataset = np.hstack([X, y]) if is_decode_y else X
+    y_class_names = [f"y_is_{c}" for c in y_encoder.classes_]
+    full_df = pd.DataFrame(
+        full_dataset, columns=(labels + y_class_names if is_decode_y else labels)
+    )
 
     # decode Duration, Bytes and Packets
     Duration_Bytes_Packets = X_encoders["Duration_Bytes_Packets"].inverse_transform(
@@ -283,8 +292,10 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
     full_df.drop("day_seconds", axis=1, inplace=True)
 
     # decode class
-    if y:
-        full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
+    if is_decode_y:
+        full_df["class"] = y_encoder.inverse_transform(
+            full_df[y_class_names].to_numpy()
+        )
 
     # rearrange classes
     full_df = full_df[
@@ -300,7 +311,7 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
             "Bytes",
             "Flags",
         ]
-        + (["class"] if y else [])
+        + (["class"] if is_decode_y else [])
     ]
     return full_df
 
@@ -397,7 +408,8 @@ def get_N_WGAN_GP_preprocessed_dataframe(data, binary_labels=True):
 
 
 def _encode_y(y: pd.Series):
-    y_encoder = LabelEncoder().fit(y)
+    # y_encoder = LabelEncoder().fit(y)
+    y_encoder = LabelBinarizer().fit(y)
     y = y_encoder.transform(y)  # to original encoding: y_encoder.inverse_transform(y)
     return y, y_encoder
 
