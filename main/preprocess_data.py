@@ -221,7 +221,7 @@ def decode_IP_N_WGAN_GP(four_cols):
     return temp.agg(lambda x: ".".join(x), axis=1)
 
 
-def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
+def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
     """Given X and y and their encoders, decode the data into traffic flow.
     If y is None, then only the X is decoded; in this case, y and y_encoder are ignored.
 
@@ -229,7 +229,7 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
         X (np.array): X.
         y (np.array | None): y. Set to None to ignore.
         y_encoder (_type_): _description_
-        labels (list): the list of labels.
+        X_labels (list): the list of X_labels.
         X_encoders (_type_): _description_
 
     Returns:
@@ -239,7 +239,7 @@ def decode_N_WGAN_GP(X, y, y_encoder, labels, X_encoders):
     full_dataset = np.hstack([X, y]) if is_decode_y else X
     y_class_names = [f"y_is_{c}" for c in y_encoder.classes_]
     full_df = pd.DataFrame(
-        full_dataset, columns=(labels + y_class_names if is_decode_y else labels)
+        full_dataset, columns=(X_labels + y_class_names if is_decode_y else X_labels)
     )
 
     # decode Duration, Bytes and Packets

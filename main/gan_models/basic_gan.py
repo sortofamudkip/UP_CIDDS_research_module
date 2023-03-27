@@ -122,12 +122,14 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         with open(filename, "rb") as f:
             # TODO: add y into dataset as well!!
-            X, y, y_encoder, labels, X_encoders = pickle.load(f)
-            self.dataset_columns = labels
+            X, y, y_encoder, X_labels, X_encoders = pickle.load(f)
+            self.X_col_labels = X_labels
+            self.y_labels = [f"y_is_{c}" for c in y_encoder.classes_]
+            self.all_col_labels = self.X_col_labels + self.y_labels
             self.X_encoders = X_encoders
+            self.y_encoder = y_encoder
 
-        full_dataset = X
-        full_dataset = full_dataset.astype(np.float32)
+        full_dataset = np.hstack([X, y]).astype(np.float32)
 
         ################################
         #     Subset to save time      #
@@ -216,11 +218,13 @@ class BasicGANPipeline(GenericPipeline):
         return generated_samples
 
     def decode_samples(self, generated_samples):
+        y_cols_len = len(self.y_encoder.classes_)
+        X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
         return decode_N_WGAN_GP(
-            generated_samples,
-            None,
-            None,
-            self.dataset_columns,
+            X,
+            y,
+            self.y_encoder,
+            self.X_col_labels,
             self.X_encoders,
         )
         # fake_y = np.zeros(num_samples).reshape(-1,1) # all 0s since we don't care atm
