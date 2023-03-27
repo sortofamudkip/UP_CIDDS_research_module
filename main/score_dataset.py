@@ -93,6 +93,23 @@ def score_ports_valid(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
+def score_diversity(data: pd.DataFrame) -> float:
+    """Tests how diverse the y labels are.
+    If only one class is present, this test scores 0.
+    If all five classes are present, this test scores 1.0.
+    In other words, the score is 0.25 * (number of unique labels - 1).
+
+    Args:
+        data (pd.DataFrame): the synthetic dataset.
+
+    Returns:
+        float: the score.
+    """
+    if not all(col in data.columns for col in ("class")):
+        return None  # skip test
+    return 0.25 * (len(data["class"].unique()) - 1)
+
+
 ############################################################
 #                                                          #
 #   These tests fail (score <100%) on external dataset     #
@@ -146,6 +163,7 @@ LIST_OF_REALISTIC_DATASET_TESTS = {
     "score_IPs_in_range": score_IPs_in_range,
     "score_numerics_valid": score_numerics_valid,
     "score_ports_valid": score_ports_valid,
+    "score_diversity": score_diversity,
 }
 
 

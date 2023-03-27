@@ -77,9 +77,8 @@ class BasicGAN(keras.Model):
         ## if D's output (prob) is close to 0, then D thinks that generated_samples is FAKE data, i.e. G is doing a bad job
         ## if D did well (G did badly), G's loss will be high, so we need to update it a lot
         ## if D did badly (G did well), G's loss will be low, so we don't need to update it that much
-        misleading_labels = tf.ones(
-            (batch_size, 1)
-        )  # Assemble labels that say "all real images".
+        # Assemble labels that say "all real images".
+        misleading_labels = tf.ones((batch_size, 1))
         with tf.GradientTape() as tape:
             generated_samples = self.generator(random_vector_labels)
             predictions = self.discriminator(generated_samples)
@@ -120,7 +119,6 @@ class BasicGANPipeline(GenericPipeline):
         #    Loading data from file    #
         ################################
         with open(filename, "rb") as f:
-            # TODO: add y into dataset as well!!
             X, y, y_encoder, X_colnames, X_encoders = pickle.load(f)
             self.X_colnames = X_colnames
             self.y_colnames = [f"y_is_{c}" for c in y_encoder.classes_]
@@ -207,7 +205,7 @@ class BasicGANPipeline(GenericPipeline):
                 EvaluateSyntheticDataRealisticnessCallback(
                     self.gan,
                     generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=500,
+                    num_samples_to_generate=1000,
                     decoder_func=self.decode_samples,
                 )
             ],
