@@ -41,12 +41,11 @@ class BasicGAN(keras.Model):
         # )
         # Generate synthetic data
         generated_images = self.generator(noise_for_generator)
-        # print(real_samples.shape, generated_images.shape)
-        # stack real and fake data to form the training set's X
-        # print(real_samples.numpy())
-        # print(generated_images.numpy())
+
+        # stack rows of real and fake data to form the training set's X
         all_samples = tf.concat((real_samples, generated_images), axis=0)
-        # stack real and fake labels to form the training set's y
+        # stack rows of real and fake labels to form the training set's y.
+        # real is 1, fake is 0
         all_samples_labels = tf.concat(
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
@@ -78,7 +77,7 @@ class BasicGAN(keras.Model):
         ## if D's output (prob) is close to 0, then D thinks that generated_samples is FAKE data, i.e. G is doing a bad job
         ## if D did well (G did badly), G's loss will be high, so we need to update it a lot
         ## if D did badly (G did well), G's loss will be low, so we don't need to update it that much
-        misleading_labels = tf.zeros(
+        misleading_labels = tf.ones(
             (batch_size, 1)
         )  # Assemble labels that say "all real images".
         with tf.GradientTape() as tape:
@@ -122,10 +121,10 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         with open(filename, "rb") as f:
             # TODO: add y into dataset as well!!
-            X, y, y_encoder, X_labels, X_encoders = pickle.load(f)
-            self.X_col_labels = X_labels
-            self.y_labels = [f"y_is_{c}" for c in y_encoder.classes_]
-            self.all_col_labels = self.X_col_labels + self.y_labels
+            X, y, y_encoder, X_colnames, X_encoders = pickle.load(f)
+            self.X_colnames = X_colnames
+            self.y_colnames = [f"y_is_{c}" for c in y_encoder.classes_]
+            self.all_col_labels = self.X_colnames + self.y_colnames
             self.X_encoders = X_encoders
             self.y_encoder = y_encoder
 
@@ -191,10 +190,14 @@ class BasicGANPipeline(GenericPipeline):
         )
         return gan
 
-    def compile_and_fit_GAN(self, learning_rate=0.0003, epochs=2):
+    def compile_and_fit_GAN(self, learning_rate=0.001, beta_1=0.9, epochs=2):
         self.gan.compile(
-            d_optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-            g_optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+            d_optimizer=keras.optimizers.Adam(
+                learning_rate=learning_rate, beta_1=beta_1
+            ),
+            g_optimizer=keras.optimizers.Adam(
+                learning_rate=learning_rate, beta_1=beta_1
+            ),
             loss_fn=keras.losses.BinaryCrossentropy(),
         )
         self.gan.fit(
@@ -224,7 +227,7 @@ class BasicGANPipeline(GenericPipeline):
             X,
             y,
             self.y_encoder,
-            self.X_col_labels,
+            self.X_colnames,
             self.X_encoders,
         )
         # fake_y = np.zeros(num_samples).reshape(-1,1) # all 0s since we don't care atm
