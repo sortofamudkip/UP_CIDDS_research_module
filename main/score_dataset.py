@@ -105,7 +105,7 @@ def score_diversity(data: pd.DataFrame) -> float:
     Returns:
         float: the score.
     """
-    if not all(col in data.columns for col in ("class")):
+    if not all(col in data.columns for col in ("class",)):
         return None  # skip test
     return 0.25 * (len(data["class"].unique()) - 1)
 

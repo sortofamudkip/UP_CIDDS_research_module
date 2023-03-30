@@ -107,6 +107,7 @@ class BasicGANPipeline(GenericPipeline):
         super().__init__()
         self.subset = subset
         self.batch_size = batch_size
+        self.history = None
         train_loader, num_cols = self.load_data(dataset_filename)
         self.dataset = train_loader
         self.num_cols = num_cols
@@ -198,7 +199,7 @@ class BasicGANPipeline(GenericPipeline):
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
         )
-        self.gan.fit(
+        self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
             callbacks=[
@@ -210,6 +211,7 @@ class BasicGANPipeline(GenericPipeline):
                 )
             ],
         )
+        return self.history
 
     def generate_samples(self, num_samples: int, **kwargs):
         latent_space_samples = tf.random.normal(
