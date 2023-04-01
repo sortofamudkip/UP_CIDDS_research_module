@@ -4,8 +4,13 @@ from .abstract import GenericPipeline
 import pickle
 import numpy as np
 import pandas as pd
-from ..score_dataset import EvaluateSyntheticDataRealisticnessCallback
+from ..score_dataset import (
+    EvaluateSyntheticDataRealisticnessCallback,
+    score_data_plausibility_single,
+)
 from ..preprocess_data import decode_N_WGAN_GP
+import wandb
+from wandb.keras import WandbMetricsLogger  # , WandbModelCheckpoint
 
 
 class BasicGAN(keras.Model):
@@ -21,8 +26,11 @@ class BasicGAN(keras.Model):
     def metrics(self):
         return [self.gen_loss_tracker, self.disc_loss_tracker]
 
-    def compile(self, d_optimizer, g_optimizer, loss_fn):
-        super().compile()
+    def compile(self, d_optimizer, g_optimizer, loss_fn, custom_metrics=[]):
+        if custom_metrics:
+            super().compile(metrics=["accuracy"])
+        else:
+            super().compile()
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
         self.loss_fn = loss_fn
@@ -103,7 +111,9 @@ class BasicGANPipeline(GenericPipeline):
         GenericPipeline (_type_): _description_
     """
 
-    def __init__(self, dataset_filename, subset=0.25, batch_size=128) -> None:
+    def __init__(
+        self, dataset_filename, subset=0.25, batch_size=128, use_wandb=False
+    ) -> None:
         super().__init__()
         self.subset = subset
         self.batch_size = batch_size
@@ -114,6 +124,20 @@ class BasicGANPipeline(GenericPipeline):
         self.discriminator = self.get_discriminator()
         self.generator = self.get_generator()
         self.gan = self.get_GAN()
+        self.use_wandb = use_wandb
+        if use_wandb:
+            self.init_wandb()
+
+    def init_wandb(self):
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="GAN for CIDDS",
+            # track hyperparameters and run metadata
+            config={
+                "architecture": "GAN-basic",
+                "preprocessing": "N",
+            },
+        )
 
     def load_data(self, filename: str):
         ################################
@@ -198,6 +222,7 @@ class BasicGANPipeline(GenericPipeline):
                 learning_rate=learning_rate, beta_1=beta_1
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
+            custom_metrics=[self.domain_knowledge_score],
         )
         self.history = self.gan.fit(
             self.dataset,
@@ -208,10 +233,19 @@ class BasicGANPipeline(GenericPipeline):
                     generate_samples_func=self.generate_samples,
                     num_samples_to_generate=1000,
                     decoder_func=self.decode_samples,
-                )
-            ],
+                ),
+            ]
+            + [WandbMetricsLogger()]
+            if self.use_wandb
+            else [],
         )
         return self.history
+
+    def domain_knowledge_score(self):
+        generated_samples = self.generate_samples(1000)
+        decoded = self.decode_samples(generated_samples)
+        score = score_data_plausibility_single(decoded)
+        return score
 
     def generate_samples(self, num_samples: int, **kwargs):
         latent_space_samples = tf.random.normal(
