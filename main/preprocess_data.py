@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from functools import reduce
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import (
@@ -460,8 +461,8 @@ def get_B_WGAN_GP_preprocessed_data(
         else []
     )
     subset = data.drop(to_drop_indices)
-    duration_normed = scale_min_max(subset["Duration"])
-    onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+    dur_scaler, dur_scaled = scale_min_max(subset["Duration"])
+    enc_proto, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
     source_ports_binary = _int_to_binary_cols(subset["SrcPt"], 16)
     dest_ports_binary = _int_to_binary_cols(subset["DstPt"], 16)
     bytes_binary = _int_to_binary_cols(subset["Bytes"], 32)
@@ -470,13 +471,12 @@ def get_B_WGAN_GP_preprocessed_data(
 
     full_X = np.hstack(
         [
-            duration_normed,
+            dur_scaled,
             onehotencoded_proto,
             source_ports_binary,
             dest_ports_binary,
             bytes_binary,
             packets_binary,
-            onehotencoded_proto,
             onehotencoded_flags,
         ]
     )
@@ -490,11 +490,16 @@ def get_B_WGAN_GP_preprocessed_data(
         + [f"0bPackets{i+1}" for i in range(32)]
         + flags_labels
     )
+    encoders = {
+        "Duration": dur_scaler,
+        "Protocols": enc_proto,
+    }
 
     if include_date_ip:  # when including date and ip, fetch their columns as well
-        src_ips = _process_N_WGAN_GP_ips(subset["SrcIP"])
-        dest_ips = _process_N_WGAN_GP_ips(subset["DstIP"])
+        src_ips = _process_B_WGAN_GP_ips(subset["SrcIP"])
+        dest_ips = _process_B_WGAN_GP_ips(subset["DstIP"])
         (
+            enc_date_first_seen,
             onehotencoded_days_of_week,
             days_of_week_labels,
             seconds_normed,
@@ -503,10 +508,51 @@ def get_B_WGAN_GP_preprocessed_data(
             [full_X, src_ips, dest_ips, onehotencoded_days_of_week, seconds_normed]
         )
         labels += (
-            [f"srcIP{i}" for i in range(1, 5)]
-            + [f"dstIP{i}" for i in range(1, 5)]
+            [f"0bSrcIP{i+1}" for i in range(32)]
+            + [f"0bSrcIP{i+1}" for i in range(32)]
             + days_of_week_labels
             + ["day_seconds"]
         )
+        encoders["Date_first_seen"] = enc_date_first_seen
 
-    return full_X, y, y_encoder, labels
+    return full_X, y, y_encoder, labels, encoders
+
+
+def _process_B_WGAN_GP_ips(column: pd.Series):
+    """IPs to B_WGAN_GP format (i.e. binarise a.b.c.d individually then concatenate them).
+
+    Args:
+        column (pd.Series): the series.
+
+    Returns:
+        np.array: 32 columns of IP.
+    """
+    ip_cols = column.apply(_deanonymise_IP).str.split(".", expand=True)
+    ip_cols = ip_cols.astype(int).applymap(lambda x: _to_binary_str(x, 8))
+    ip_cols = ip_cols[0] + ip_cols[1] + ip_cols[2] + ip_cols[3]
+    ip_cols = ip_cols.str.split("", expand=True).loc[:, 1:32].to_numpy(dtype=int)
+
+    return ip_cols
+
+
+_binary_str_to_int = np.vectorize(lambda s: int(s, 2))
+
+
+def _decode_B_WGAN_GP_ips(thirtytwo_cols):
+    four_parts = np.hsplit(thirtytwo_cols, 4)
+    combined = [part.astype(str) for part in four_parts]
+    combined = [
+        np.apply_along_axis(lambda x: "".join(x), 1, part.astype(str))
+        for part in combined
+    ]
+    to_int = np.array([_binary_str_to_int(part) for part in combined], dtype=str).T
+    to_ip_str = np.apply_along_axis(lambda x: ".".join(x), 1, to_int)
+
+    return pd.Series(to_ip_str)
+
+
+"""
+    temp = (four_cols * 255).astype(int).astype(str)
+    return temp.agg(lambda x: ".".join(x), axis=1)
+
+"""
