@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta
-from functools import reduce
 import numpy as np
 import pandas as pd
+from .preprocessing_utils.general.encode import (
+    one_hot_encode_Proto,
+    one_hot_encode_TCP_Flags,
+    _preprocess_date_first_seen,
+    scale_min_max,
+)
+from .preprocessing_utils.N.encode import scale_ports_N
 from sklearn.preprocessing import (
     OneHotEncoder,
     MinMaxScaler,
@@ -10,187 +16,7 @@ from sklearn.preprocessing import (
 )
 
 
-def one_hot_encode_Proto(data: pd.Series) -> np.array:
-    """one-hot encode the Proto column.
-    Usage: onehotencoded_enc, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
 
-
-    Args:
-        data (pd.Series): The series as indexed by data["Proto"].
-
-    Returns:
-        np.array: np.array of shape (num_rows, 4).
-    """
-    protocols = data.to_numpy().reshape(-1, 1)
-    enc = OneHotEncoder()
-    enc.fit(protocols)
-    # print("categories:", enc.categories_)
-    return (
-        enc,
-        enc.transform(protocols).toarray(),
-        list(enc.get_feature_names_out(["is"])),
-    )
-
-
-def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
-    """one-hot encode the Flags column.
-    Usage: one_hot_encode_TCP_Flags(data["Flags"])
-
-    Args:
-        data (pd.Series): _description_
-
-    Returns:
-        np.array: np.array of shape (num_rows, 4).
-    """
-    return_value = (
-        data.str.split("", expand=True)
-        .loc[:, 1:6]
-        .applymap(lambda x: 0 if x == "." else 1)
-        .to_numpy()
-    )
-    labels = ["is_URG", "is_ACK", "is_PSH", "is_RES", "is_SYN", "is_FIN"]
-    return return_value, labels
-
-
-def scale_min_max(data: pd.DataFrame) -> np.array:
-    """wrapper for min max scaler.
-    Usage:
-        scale: scaler, scaled = scale_min_max(data["Duration"])
-        unscale: scaler.inverse_transform(scaled)
-    Args:
-        data (pd.DataFrame): a Series or multiple cols.
-
-    Returns:
-        np.array: Scaler.
-        np.array: Scaled.
-    """
-    d = (
-        data.to_numpy().reshape(-1, 1)
-        if isinstance(data, pd.Series)
-        else data.to_numpy()
-    )
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(d)
-    return scaler, scaled
-
-
-def scale_ports(data: pd.DataFrame) -> np.array:
-    d = (
-        data.to_numpy().reshape(-1, 1)
-        if isinstance(data, pd.Series)
-        else data.to_numpy()
-    )
-    return d / 65535
-
-
-def _preprocess_date_first_seen(dates_first_seen: pd.Series):
-    """process date_first_seen attribute. It's the same for all preprocessing methods.
-    Usage: _preprocess_date_first_seen(dataset.Date_first_seen)
-
-    Args:
-        dates_first_seen (pd.Series): the Date_first_seen column.
-    """
-    day_col_names = [
-        "is_Monday",
-        "is_Tuesday",
-        "is_Wednesday",
-        "is_Thursday",
-        "is_Friday",
-        "is_Saturday",
-        "is_Sunday",
-    ]
-    dates = dates_first_seen.apply(
-        lambda the_date: datetime.strptime(the_date, "%Y-%m-%d %H:%M:%S.%f")
-    )
-    days_of_week = (
-        dates.apply(lambda the_date: day_col_names[the_date.weekday()])
-        .to_numpy()
-        .reshape(-1, 1)
-    )
-    seconds_of_day = (
-        dates.apply(
-            lambda t: t.hour * 60 * 60 + t.minute * 60 + t.second
-        )  # ignore miliseconds
-        .to_numpy()
-        .reshape(-1, 1)
-    ) / 86400
-    enc = OneHotEncoder()
-    enc.fit(days_of_week)
-    return (
-        enc,
-        enc.transform(days_of_week).toarray(),
-        list(enc.categories_[0]),
-        seconds_of_day,
-    )
-
-
-def _random_IP_addr(random_seed=555, final_digit=0):
-    # private IPs: 10.0.0.0 to 10.255.255.255
-    # private IPs: 172.16.0.0 to 172.31.255.255
-    # private IPs: 192.168.0.0 to 192.168.255.255
-    # since the private IP addresses were not anonymised, we have to make sure we avoid accidentally generating private ones
-    rng = np.random.default_rng(random_seed)
-
-    first_num_choices = set(range(0, 256)) - set(
-        (10,)
-    )  # probably super inefficient lol
-    first_num = rng.choice(list(first_num_choices))
-
-    # determine second_num choices
-    if first_num == 172:  # can't be [16,31], i.e. in [0,15] or [32,256]
-        second_num_choices = set(range(0, 16)) | set(range(31 + 1, 256))
-    elif first_num == 192:  # can't be 168
-        second_num_choices = set(range(0, 256)) - set((168,))
-    else:
-        second_num_choices = set(range(0, 256))
-    second_num = rng.choice(list(second_num_choices))
-    third_num = rng.integers(0, 255 + 1)
-    # fourth_num = rng.integers(0,255+1)
-    return f"{first_num}.{second_num}.{third_num}.{final_digit}"
-
-
-def _deanonymise_IP(ip: str) -> list:
-    """convert anonymised IPs to ip strings.
-    Ex: EXT_SERVER, OPENSTACK_NET, 39832_109 etc.
-
-    Args:
-        ip (str): the anonymised IP.
-
-    Returns:
-        list: the denonymised IP as its 4 bytes.
-    """
-    if ip == "EXT_SERVER":
-        ip = f"555_127"
-    elif ip == "OPENSTACK_NET":
-        ip = f"777_187"
-    elif ip == "DNS":
-        ip = f"444_75"
-    elif ip == "ATTACKER1":
-        ip = f"111_64"
-    elif ip == "ATTACKER2":
-        ip = f"222_75"
-    elif ip == "ATTACKER3":
-        ip = f"333_2"
-    front_back = ip.split("_")
-    if len(front_back) == 1:
-        return ip  # already an ip address
-    front, back = int(front_back[0]), int(front_back[1])
-    # use the front value as seed, so that unique values always map to the same randomly-generated IP.
-    return _random_IP_addr(front, back)
-
-
-# list of special anonymised IPs.
-ANONYMISED_NAMED_IPS = {
-    name: _deanonymise_IP(name)
-    for name in [
-        "EXT_SERVER",
-        "OPENSTACK_NET",
-        "DNS",
-        "ATTACKER1",
-        "ATTACKER2",
-        "ATTACKER3",
-    ]
-}
 
 
 def _process_N_WGAN_GP_ips(column: pd.Series):
@@ -354,7 +180,7 @@ def get_N_WGAN_GP_preprocessed_data(
     dur_bytes_packets_scaler, dur_bytes_packets_scaled = scale_min_max(
         subset[["Duration", "Bytes", "Packets"]]
     )
-    ports_normed = scale_ports(subset[["SrcPt", "DstPt"]])
+    ports_normed = scale_ports_N(subset[["SrcPt", "DstPt"]])
     enc_proto, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
     onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
     full_X = np.hstack(
@@ -549,10 +375,3 @@ def _decode_B_WGAN_GP_ips(thirtytwo_cols):
     to_ip_str = np.apply_along_axis(lambda x: ".".join(x), 1, to_int)
 
     return pd.Series(to_ip_str)
-
-
-"""
-    temp = (four_cols * 255).astype(int).astype(str)
-    return temp.agg(lambda x: ".".join(x), axis=1)
-
-"""
