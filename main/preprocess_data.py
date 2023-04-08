@@ -6,23 +6,14 @@ from .preprocessing_utils.general.encode import (
     one_hot_encode_TCP_Flags,
     _preprocess_date_first_seen,
     scale_min_max,
+    _decode_TCP_flags_one,
+    _encode_y,
 )
 from .preprocessing_utils.N.encode import scale_ports_N, _process_N_WGAN_GP_ips
 from .preprocessing_utils.N.decode import decode_IP_N_WGAN_GP
-from sklearn.preprocessing import (
-    OneHotEncoder,
-    MinMaxScaler,
-    LabelEncoder,
-    LabelBinarizer,
-)
 
 from .preprocessing_utils.general.ip_utils import _deanonymise_IP
-
-
-def decode_TCP_flags_one(*six_flags):
-    full_flags = "UAPRSF"
-    flag = [full_flags[i] if six_flags[i] > 0.5 else "." for i in range(6)]
-    return "".join(flag)
+from .preprocessing_utils.B.encode import _int_to_binary_cols, _to_binary_str
 
 
 def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
@@ -65,7 +56,7 @@ def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
     # decode TCP flags
     flag_names = ["is_URG", "is_ACK", "is_PSH", "is_RES", "is_SYN", "is_FIN"]
     full_df["Flags"] = full_df[flag_names].apply(
-        lambda x: decode_TCP_flags_one(*x), axis=1
+        lambda x: _decode_TCP_flags_one(*x), axis=1
     )
     full_df.drop(flag_names, axis=1, inplace=True)
 
@@ -209,27 +200,6 @@ def get_N_WGAN_GP_preprocessed_dataframe(data, binary_labels=True):
     full_df = pd.DataFrame(full_dataset, columns=labels + ["class"])
     full_df["class"] = y_encoder.inverse_transform(full_df["class"].astype(int))
     return full_df
-
-
-def _encode_y(y: pd.Series):
-    # y_encoder = LabelEncoder().fit(y)
-    y_encoder = LabelBinarizer().fit(y)
-    y = y_encoder.transform(y)  # to original encoding: y_encoder.inverse_transform(y)
-    return y, y_encoder
-
-
-def _to_binary_str(num: int, max_len=16) -> str:
-    return format(num, f"0{max_len}b").zfill(max_len)[-max_len:]
-
-
-def _int_to_binary_cols(col: pd.Series, max_len=16) -> np.array:
-    return (
-        col.apply(lambda val: (_to_binary_str(val, max_len)))
-        .str.split("", expand=True)
-        .loc[:, 1:max_len]
-        .to_numpy()
-        .astype(int)
-    )
 
 
 def get_B_WGAN_GP_preprocessed_data(

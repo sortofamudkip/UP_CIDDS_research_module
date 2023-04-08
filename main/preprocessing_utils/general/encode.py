@@ -1,4 +1,4 @@
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, LabelBinarizer
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -107,3 +107,15 @@ def scale_min_max(data: pd.DataFrame) -> np.array:
     scaler = MinMaxScaler()
     scaled = scaler.fit_transform(d)
     return scaler, scaled
+
+
+def _decode_TCP_flags_one(*six_flags):
+    full_flags = "UAPRSF"
+    flag = [full_flags[i] if six_flags[i] > 0.5 else "." for i in range(6)]
+    return "".join(flag)
+
+
+def _encode_y(y: pd.Series):
+    y_encoder = LabelBinarizer().fit(y)
+    y = y_encoder.transform(y)  # to original encoding: y_encoder.inverse_transform(y)
+    return y, y_encoder
