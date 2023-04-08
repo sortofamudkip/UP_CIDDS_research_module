@@ -7,7 +7,8 @@ from .preprocessing_utils.general.encode import (
     _preprocess_date_first_seen,
     scale_min_max,
 )
-from .preprocessing_utils.N.encode import scale_ports_N
+from .preprocessing_utils.N.encode import scale_ports_N, _process_N_WGAN_GP_ips
+from .preprocessing_utils.N.decode import decode_IP_N_WGAN_GP
 from sklearn.preprocessing import (
     OneHotEncoder,
     MinMaxScaler,
@@ -18,33 +19,10 @@ from sklearn.preprocessing import (
 from .preprocessing_utils.general.ip_utils import _deanonymise_IP
 
 
-def _process_N_WGAN_GP_ips(column: pd.Series):
-    """IPs to N_WGAN_GP format (i.e. normalise the 4 bytes individually).
-    usage:
-
-    Args:
-        column (pd.Series): the series.
-
-    Returns:
-        _type_: _description_
-    """
-    return (
-        column.apply(_deanonymise_IP)
-        .str.split(".", expand=True)
-        .to_numpy(dtype=np.int16)
-        / 255
-    )
-
-
 def decode_TCP_flags_one(*six_flags):
     full_flags = "UAPRSF"
     flag = [full_flags[i] if six_flags[i] > 0.5 else "." for i in range(6)]
     return "".join(flag)
-
-
-def decode_IP_N_WGAN_GP(four_cols):
-    temp = (four_cols * 255).astype(int).astype(str)
-    return temp.agg(lambda x: ".".join(x), axis=1)
 
 
 def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
