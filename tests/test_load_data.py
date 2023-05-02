@@ -1,12 +1,17 @@
 import sys, pytest
 
-sys.path.append("../main/")  # Adds higher directory to python modules path.
+# sys.path.append("../main/")  # Adds higher directory to python modules path.
 
-import load_data
+# import load_data
+
+from ..main.load_data import load_data, _hex_string_to_TCP_flags
 
 
 def test_load_data_len():
-    data = load_data.load_data()
+    data = load_data(True)
+    assert len(data) == 671241
+
+    data = load_data(False)
     assert len(data) == 671241
 
 
@@ -21,4 +26,4 @@ def test_load_data_len():
     ],
 )
 def test_hex_string_to_TCP_flags(hex_str, TCP_string_result):
-    assert load_data._hex_string_to_TCP_flags(hex_str) == TCP_string_result
+    assert _hex_string_to_TCP_flags(hex_str) == TCP_string_result

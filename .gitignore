@@ -153,3 +153,4 @@ cython_debug/
 
 # specific to this project
 dataset/
+.DS_Store
