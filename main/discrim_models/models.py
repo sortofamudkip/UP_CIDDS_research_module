@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
 
 
 def y_train_test_split_summary(y, y_train, y_test, y_encoder):
@@ -11,7 +12,7 @@ def y_train_test_split_summary(y, y_train, y_test, y_encoder):
     Usage:
         y_encoder = LabelEncoder().fit(y)
         y = y_encoder.transform(y)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=55)
+        X, y, y_encoder, x_labels, x_encoders = train_test_split(X, y, test_size=0.33, random_state=55)
         y_train_test_split_summary(y, y_train, y_test, y_encoder)
 
     Args:
@@ -20,24 +21,35 @@ def y_train_test_split_summary(y, y_train, y_test, y_encoder):
         y_test (np.array): y_test.
         y_encoder (sklearn.preprocessing.LabelEncoder): the encoder.
     """
+    decoded_y = y_encoder.inverse_transform(y)
     all_y_info = (
-        pd.DataFrame(np.unique(y, return_counts=True)).T.set_index(0) / len(y) * 100
-    )
-    all_y_info_raw = pd.DataFrame(np.unique(y, return_counts=True)).T.set_index(0)
-    y_train_info = (
-        pd.DataFrame(np.unique(y_train, return_counts=True)).T.set_index(0)
-        / len(y_train)
+        pd.DataFrame(np.unique(decoded_y, return_counts=True)).T.set_index(0)
+        / len(decoded_y)
         * 100
     )
-    y_train_info_raw = pd.DataFrame(np.unique(y_train, return_counts=True)).T.set_index(
+    all_y_info_raw = pd.DataFrame(np.unique(decoded_y, return_counts=True)).T.set_index(
         0
     )
-    y_test_info = (
-        pd.DataFrame(np.unique(y_test, return_counts=True)).T.set_index(0)
-        / len(y_test)
+
+    decoded_y_train = y_encoder.inverse_transform(y_train)
+    y_train_info = (
+        pd.DataFrame(np.unique(decoded_y_train, return_counts=True)).T.set_index(0)
+        / len(decoded_y_train)
         * 100
     )
-    y_test_info_raw = pd.DataFrame(np.unique(y_test, return_counts=True)).T.set_index(0)
+    y_train_info_raw = pd.DataFrame(
+        np.unique(decoded_y_train, return_counts=True)
+    ).T.set_index(0)
+
+    decoded_y_test = y_encoder.inverse_transform(y_test)
+    y_test_info = (
+        pd.DataFrame(np.unique(decoded_y_test, return_counts=True)).T.set_index(0)
+        / len(decoded_y_test)
+        * 100
+    )
+    y_test_info_raw = pd.DataFrame(
+        np.unique(decoded_y_test, return_counts=True)
+    ).T.set_index(0)
     y_train_test_stats = pd.concat(
         [
             all_y_info_raw,
@@ -60,12 +72,10 @@ def y_train_test_split_summary(y, y_train, y_test, y_encoder):
         },
         axis=1,
     )
-    return y_train_test_stats.rename(
-        index={
-            label: y_encoder.inverse_transform([label])[0]
-            for label in range(0, len(np.unique(y)))
-        }
+    y_train_test_stats.index = y_encoder.inverse_transform(
+        np.eye(len(y_encoder.classes_))
     )
+    return y_train_test_stats
 
 
 def knn_train_predict(
@@ -79,7 +89,26 @@ def knn_train_predict(
 def mlp_train_predict(
     X_train, X_test, y_train, y_test, y_encoder, **kwargs
 ) -> np.array:
+    """Create a simple MLP. Train data on it, then predict on it.
+
+    Args:
+        X_train (np.array): X training data.
+        X_test (np.array): X testing data.
+        y_train (np.array): y training data.
+        y_test (np.array): y testing data. Not used.
+        y_encoder (any): encoder for y. Not used.
+
+    Returns:
+        np.array: predicted results.
+    """
     model = MLPClassifier(
         random_state=1, max_iter=300, early_stopping=False, **kwargs
     ).fit(X_train, y_train)
     return model.predict(X_test)
+
+
+def tree_train_predict(
+    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+) -> np.array:
+    clf = DecisionTreeClassifier(random_state=555, **kwargs).fit(X_train, y_train)
+    return clf.predict(X_test)
