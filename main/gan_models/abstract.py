@@ -59,5 +59,12 @@ class GenericPipeline(ABC):
         pass
 
     @abstractmethod
-    def decode_samples(self):
+    def decode_samples_to_human_format(self):
         """Decodes samples to mimic original (human-readable) form."""
+
+    @abstractmethod
+    def decode_samples_to_model_format(self):
+        """Decodes samples to feed into a model.
+        This should be the TRAINING set for TSTR methods.
+        Specifically, it should return X, y, X_colnames, X_encoders, y_encoders.
+        """
