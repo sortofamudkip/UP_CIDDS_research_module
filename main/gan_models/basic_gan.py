@@ -9,8 +9,9 @@ from ..score_dataset import (
     score_data_plausibility_single,
 )
 from ..preprocess_data import decode_N_WGAN_GP
-import wandb
-from wandb.keras import WandbMetricsLogger  # , WandbModelCheckpoint
+
+# import wandb
+# from wandb.keras import WandbMetricsLogger  # , WandbModelCheckpoint
 
 
 class BasicGAN(keras.Model):
@@ -129,15 +130,16 @@ class BasicGANPipeline(GenericPipeline):
             self.init_wandb()
 
     def init_wandb(self):
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project="GAN for CIDDS",
-            # track hyperparameters and run metadata
-            config={
-                "architecture": "GAN-basic",
-                "preprocessing": "N",
-            },
-        )
+        # wandb.init(
+        #     # set the wandb project where this run will be logged
+        #     project="GAN for CIDDS",
+        #     # track hyperparameters and run metadata
+        #     config={
+        #         "architecture": "GAN-basic",
+        #         "preprocessing": "N",
+        #     },
+        # )
+        pass
 
     def load_data(self, filename: str):
         ################################
@@ -235,9 +237,8 @@ class BasicGANPipeline(GenericPipeline):
                     decoder_func=self.decode_samples,
                 ),
             ]
-            + [WandbMetricsLogger()]
-            if self.use_wandb
-            else [],
+            # + [WandbMetricsLogger()]
+            # if self.use_wandb else [],
         )
         return self.history
 
@@ -254,7 +255,7 @@ class BasicGANPipeline(GenericPipeline):
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples
 
-    def decode_samples(self, generated_samples):
+    def decode_samples_to_human_format(self, generated_samples):
         y_cols_len = len(self.y_encoder.classes_)
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
         return decode_N_WGAN_GP(
@@ -266,3 +267,7 @@ class BasicGANPipeline(GenericPipeline):
         )
         # fake_y = np.zeros(num_samples).reshape(-1,1) # all 0s since we don't care atm
         # preprocessor.decode_N_WGAN_GP(X=generated_samples, y=fake_y, y_encoder=y_encoder, labels=labels, X_encoders=X_encoders)
+
+    def decode_samples_to_model_format(self, generated_samples):
+        y_cols_len = len(self.y_encoder.classes_)
+        X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
