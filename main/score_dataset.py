@@ -175,11 +175,12 @@ def score_data_plausibility_detailed(data):
     return pd.DataFrame(report)
 
 
-def score_data_plausibility_single(data):
+def score_data_plausibility_single(data, verbose=True):
     report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
-    print(
-        f"\nreport:\n\t{[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
-    )
+    if verbose:
+        print(
+            f"\nreport:\n\t{[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
+        )
     report = [score for score in report if not (score is None or score is False)]
     return np.nanmean(np.array(report))
 

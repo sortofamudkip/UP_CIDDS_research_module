@@ -36,7 +36,12 @@ def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
     """
     is_decode_y = True if y is not None else False
     full_dataset = np.hstack([X, y]) if is_decode_y else X
-    y_class_names = [f"y_is_{c}" for c in y_encoder.classes_]
+
+    if len(y_encoder.classes_) == 2:
+        y_class_names = ["y"]
+    else:
+        y_class_names = [f"y_is_{c}" for c in y_encoder.classes_]
+
     full_df = pd.DataFrame(
         full_dataset, columns=(X_labels + y_class_names if is_decode_y else X_labels)
     )

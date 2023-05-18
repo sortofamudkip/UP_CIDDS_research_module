@@ -107,19 +107,32 @@ class BasicGAN(keras.Model):
 class BasicGANPipeline(GenericPipeline):
     """A basic GAN that only generates unlabled flows (NOT labled).
     Typical usage: basic_gan_pipeline = BasicGANPipeline(), then basic_gan_pipeline.compile_and_fit_GAN()
-
-    Args:
-        GenericPipeline (_type_): _description_
     """
 
     def __init__(
-        self, dataset_filename, subset=0.25, batch_size=128, use_wandb=False
+        self,
+        dataset_filename: str,
+        decoding_func,  # currently either decode_N_WGAN_GP or decode_B_WGAN_GP
+        subset=0.25,
+        batch_size: int = 128,
+        use_wandb: bool = False,
     ) -> None:
         super().__init__()
         self.subset = subset
         self.batch_size = batch_size
         self.history = None
+        self.decoding_func = decoding_func
+
+        # these are to be filled out by self.load_data
+        self.X = None
+        self.y = None
+        self.X_colnames = None
+        self.y_colnames = None
+        self.all_col_labels = None
+        self.X_encoders = None
+        self.y_encoder = None
         train_loader, num_cols = self.load_data(dataset_filename)
+
         self.dataset = train_loader
         self.num_cols = num_cols
         self.discriminator = self.get_discriminator()
@@ -147,6 +160,8 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         with open(filename, "rb") as f:
             X, y, y_encoder, X_colnames, X_encoders = pickle.load(f)
+            self.X = X
+            self.y = y
             self.X_colnames = X_colnames
             self.y_colnames = [f"y_is_{c}" for c in y_encoder.classes_]
             self.all_col_labels = self.X_colnames + self.y_colnames
@@ -169,13 +184,12 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         # Convert to Dataloader format #
         ################################
-        # it's 0 because we don't care about the label yet
-        # train_set = [(sampled_dataset[i], 0) for i in range(sampled_dataset.shape[0])] # to make it in the torch.utils.data.DataLoader format
-
-        # dataset = tf.data.Dataset.from_tensor_slices( (sampled_dataset, np.zeros(sampled_dataset.shape[0]) ))
         dataset = tf.data.Dataset.from_tensor_slices(sampled_dataset)
         dataset = dataset.shuffle(buffer_size=8192).batch(self.batch_size)
         return dataset, sampled_dataset.shape[1]
+
+    def get_X_y(self):
+        return self.X, self.y_encoder.inverse_transform(self.y)
 
     def get_discriminator(self):
         discriminator = keras.Sequential(
@@ -234,7 +248,7 @@ class BasicGANPipeline(GenericPipeline):
                     self.gan,
                     generate_samples_func=self.generate_samples,
                     num_samples_to_generate=1000,
-                    decoder_func=self.decode_samples,
+                    decoder_func=self.decode_samples_to_human_format,
                 ),
             ]
             # + [WandbMetricsLogger()]
@@ -256,9 +270,10 @@ class BasicGANPipeline(GenericPipeline):
         return generated_samples
 
     def decode_samples_to_human_format(self, generated_samples):
-        y_cols_len = len(self.y_encoder.classes_)
+        y_cols_len = self.get_y_cols_len()
+
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
-        return decode_N_WGAN_GP(
+        return self.decoding_func(
             X,
             y,
             self.y_encoder,
@@ -269,5 +284,17 @@ class BasicGANPipeline(GenericPipeline):
         # preprocessor.decode_N_WGAN_GP(X=generated_samples, y=fake_y, y_encoder=y_encoder, labels=labels, X_encoders=X_encoders)
 
     def decode_samples_to_model_format(self, generated_samples):
-        y_cols_len = len(self.y_encoder.classes_)
+        y_cols_len = self.get_y_cols_len()
+
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
+        return X, self.y_encoder.inverse_transform(y), self.y_encoder
+
+    def get_y_cols_len(self):
+        # for whatever reason, if there are only 2 classes,
+        # the number of columns in y is only 1 (instead of one-hot-encoded as 2).
+        # so if there are only 2 classes, we only take the last col as y.
+        if len(self.y_encoder.classes_) == 2:
+            y_cols_len = 1
+        else:
+            y_cols_len = len(self.y_encoder.classes_)
+        return y_cols_len

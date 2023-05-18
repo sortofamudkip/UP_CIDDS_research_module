@@ -9,7 +9,7 @@ from pandas import DataFrame
 
 
 def binary_stats(y_true, y_pred, title, y_encoder):
-    pos_label = y_encoder.transform(["attacker"])[0][0]
+    pos_label = "attacker"
     stats = DataFrame(
         {
             "accuracy": [accuracy_score(y_true, y_pred)],
