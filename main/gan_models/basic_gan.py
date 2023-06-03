@@ -38,7 +38,7 @@ class BasicGAN(keras.Model):
 
     def train_step(self, data):
         # Unpack the data.
-        real_samples = data  # _ is because we don't care about the labels yet
+        real_samples = data
         ################################
         # Generate fake data (train D) #
         ################################
@@ -265,7 +265,7 @@ class BasicGANPipeline(GenericPipeline):
     def generate_samples(self, num_samples: int, **kwargs):
         latent_space_samples = tf.random.normal(
             (num_samples, self.num_cols)
-        )  # (5 samples of noise, number of cols)
+        )  # (num_samples samples of noise, number of cols)
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples
 
