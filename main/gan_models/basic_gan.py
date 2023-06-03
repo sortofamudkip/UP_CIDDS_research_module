@@ -9,6 +9,8 @@ from ..score_dataset import (
     score_data_plausibility_single,
 )
 from ..preprocess_data import decode_N_WGAN_GP
+from pathlib import Path
+
 
 # import wandb
 # from wandb.keras import WandbMetricsLogger  # , WandbModelCheckpoint
@@ -86,7 +88,7 @@ class BasicGAN(keras.Model):
         ## if D's output (prob) is close to 0, then D thinks that generated_samples is FAKE data, i.e. G is doing a bad job
         ## if D did well (G did badly), G's loss will be high, so we need to update it a lot
         ## if D did badly (G did well), G's loss will be low, so we don't need to update it that much
-        # Assemble labels that say "all real images".
+        # Assemble labels that say "all real images", even all samples here are fake.
         misleading_labels = tf.ones((batch_size, 1))
         with tf.GradientTape() as tape:
             generated_samples = self.generator(random_vector_labels)
@@ -105,7 +107,7 @@ class BasicGAN(keras.Model):
 
 
 class BasicGANPipeline(GenericPipeline):
-    """A basic GAN that only generates unlabled flows (NOT labled).
+    """A basic GAN that only generates unlabled flows (NOT labeled).
     Typical usage: basic_gan_pipeline = BasicGANPipeline(), then basic_gan_pipeline.compile_and_fit_GAN()
     """
 
@@ -113,6 +115,7 @@ class BasicGANPipeline(GenericPipeline):
         self,
         dataset_filename: str,
         decoding_func,  # currently either decode_N_WGAN_GP or decode_B_WGAN_GP
+        pipeline_name: str,  # name of the pipeline, for saving models/datasets.
         subset=0.25,
         batch_size: int = 128,
         use_wandb: bool = False,
@@ -122,6 +125,7 @@ class BasicGANPipeline(GenericPipeline):
         self.batch_size = batch_size
         self.history = None
         self.decoding_func = decoding_func
+        self.pipeline_name = pipeline_name
 
         # these are to be filled out by self.load_data
         self.X = None
@@ -141,6 +145,16 @@ class BasicGANPipeline(GenericPipeline):
         self.use_wandb = use_wandb
         if use_wandb:
             self.init_wandb()
+        self.create_results_dir()
+
+    def create_results_dir(self):
+        output_dir = Path(__file__).parent / "../../../results" / self.pipeline_name
+        try:
+            output_dir.mkdir(parents=True, exist_ok=False)
+            print(f"Created output dir {output_dir}.")
+        except FileExistsError:
+            print(f"Dir {output_dir} already exists!")
+            assert False
 
     def init_wandb(self):
         # wandb.init(
@@ -247,8 +261,9 @@ class BasicGANPipeline(GenericPipeline):
                 EvaluateSyntheticDataRealisticnessCallback(
                     self.gan,
                     generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=1000,
+                    num_samples_to_generate=int(self.X.shape[0] * 0.5),
                     decoder_func=self.decode_samples_to_human_format,
+                    pipeline_name=self.pipeline_name,
                 ),
             ]
             # + [WandbMetricsLogger()]
