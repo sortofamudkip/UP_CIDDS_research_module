@@ -2,6 +2,8 @@ import pandas as pd
 import re
 import numpy as np
 from tensorflow import keras
+import pickle
+from pathlib import Path
 
 # example usage:
 #   data = pd.read_csv('external_denonymisedIPs.csv.zip', compression='zip', index_col=0)
@@ -15,7 +17,7 @@ from tensorflow import keras
 
 
 # "Test  (Ring et al 2018)"
-def score_normal_http_is_tcp(data: pd.DataFrame) -> float:
+def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
     subset = data[
@@ -33,7 +35,7 @@ def score_normal_http_is_tcp(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
-def score_packet_size(data: pd.DataFrame) -> float:
+def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("Proto", "Packets", "Bytes")):
         return None  # skip test
     subset = data[
@@ -52,7 +54,7 @@ def score_packet_size(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
-def score_IPs_in_range(data: pd.DataFrame) -> float:
+def score_IPs_in_range(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcIP", "DstIP")):
         return None  # skip test
     srcIPs_valid = data["SrcIP"].apply(_validate_ipv4)
@@ -68,7 +70,7 @@ def score_IPs_in_range(data: pd.DataFrame) -> float:
 ############################################################
 
 
-def score_numerics_valid(data: pd.DataFrame) -> float:
+def score_numerics_valid(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("Duration", "Packets", "Bytes")):
         return None  # skip test
     subset = data[["Duration", "Packets", "Bytes"]]
@@ -78,7 +80,7 @@ def score_numerics_valid(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
-def score_ports_valid(data: pd.DataFrame) -> float:
+def score_ports_valid(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcPt", "DstPt")):
         return None  # skip test
     subset = data[["SrcPt", "DstPt"]]
@@ -93,7 +95,7 @@ def score_ports_valid(data: pd.DataFrame) -> float:
     return condition.sum() / len(subset)
 
 
-def score_diversity(data: pd.DataFrame) -> float:
+def score_diversity(data: pd.DataFrame, num_classes: int) -> float:
     """Tests how diverse the y labels are.
     If only one class is present, this test scores 0.
     If all five classes are present, this test scores 1.0.
@@ -107,7 +109,8 @@ def score_diversity(data: pd.DataFrame) -> float:
     """
     if not all(col in data.columns for col in ("class",)):
         return None  # skip test
-    return 0.25 * (len(data["class"].unique()) - 1)
+    factor = 0.25 if num_classes == 5 else 1
+    return factor * (len(data["class"].unique()) - 1)
 
 
 ############################################################
@@ -118,7 +121,7 @@ def score_diversity(data: pd.DataFrame) -> float:
 
 
 # "Test 1 (Ring et al 2018)"
-def score_if_udp_no_tcp_flags(data: pd.DataFrame) -> float:
+def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("Proto", "class", "Flags")):
         return None  # skip test
     subset = data[(data["Proto"] == "UDP") & (data["class"] == "normal")]
@@ -129,7 +132,7 @@ def score_if_udp_no_tcp_flags(data: pd.DataFrame) -> float:
 
 
 # "Test 4 (Ring et al 2018)"
-def score_normal_dns_is_UDP(data: pd.DataFrame) -> float:
+def score_normal_dns_is_UDP(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
     subset = data[
@@ -175,11 +178,14 @@ def score_data_plausibility_detailed(data):
     return pd.DataFrame(report)
 
 
-def score_data_plausibility_single(data, verbose=True):
-    report = [scorefunc(data) for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()]
+def score_data_plausibility_single(data, num_classes: int, verbose=True):
+    report = [
+        scorefunc(data, num_classes)
+        for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()
+    ]
     if verbose:
         print(
-            f"\nreport:\n\t{[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
+            f"report: {[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
         )
     report = [score for score in report if not (score is None or score is False)]
     return np.nanmean(np.array(report))
@@ -195,16 +201,33 @@ class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
     """
 
     def __init__(
-        self, model, generate_samples_func, num_samples_to_generate, decoder_func
+        self,
+        model,
+        generate_samples_func,
+        num_samples_to_generate,
+        decoder_func,
+        pipeline_name,
     ):
         self.model = model
         self.generate_samples_func = generate_samples_func
         self.num_samples_to_generate = num_samples_to_generate
         self.decoder_func = decoder_func
+        self.pipeline_name = pipeline_name
 
     def on_epoch_end(self, epoch, logs={}):
         # print(f"epoch {epoch}, logs {logs}, model {self.model}")
         generated_samples = self.generate_samples_func(self.num_samples_to_generate)
-        decoded = self.decoder_func(generated_samples)
-        score = score_data_plausibility_single(decoded)
-        print(f"\trealistic dataset score: {score}")
+        # decoded = self.decoder_func(generated_samples)
+        # score = score_data_plausibility_single(decoded)
+        # save dataset for future evaluation
+        output_path = (
+            Path(__file__).parent
+            / f"../../results/"
+            / self.pipeline_name
+            / f"synthetic_epoch{epoch+1}.npy"
+        )
+        np.save(output_path, generated_samples)
+        # print(f"\trealistic dataset score: {score}")
+
+
+# class EvaluateSyntheticDataTSTRCallback(keras.callbacks.Callback):
