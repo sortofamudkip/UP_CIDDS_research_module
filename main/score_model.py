@@ -13,9 +13,15 @@ def binary_stats(y_true, y_pred, title, y_encoder):
     stats = DataFrame(
         {
             "accuracy": [accuracy_score(y_true, y_pred)],
-            "precision": [precision_score(y_true, y_pred, pos_label=pos_label)],
-            "recall": [recall_score(y_true, y_pred, pos_label=pos_label)],
-            "f1_score": [f1_score(y_true, y_pred, pos_label=pos_label)],
+            "precision": [
+                precision_score(y_true, y_pred, pos_label=pos_label, zero_division=0)
+            ],
+            "recall": [
+                recall_score(y_true, y_pred, pos_label=pos_label, zero_division=0)
+            ],
+            "f1_score": [
+                f1_score(y_true, y_pred, pos_label=pos_label, zero_division=0)
+            ],
             "confusion_matrix": [confusion_matrix(y_true, y_pred)],
         },
         index=[title],
