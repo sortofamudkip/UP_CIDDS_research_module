@@ -20,7 +20,7 @@ from .preprocessing_utils.B.encode import (
 )
 
 
-def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
+def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders) -> pd.DataFrame:
     """Given X and y and their encoders, decode the data into traffic flow.
     If y is None, then only the X is decoded; in this case, y and y_encoder are ignored.
 
@@ -32,7 +32,7 @@ def decode_N_WGAN_GP(X, y, y_encoder, X_labels, X_encoders):
         X_encoders (_type_): _description_
 
     Returns:
-        _type_: _description_
+        pd.DataFrame: a Dataframe.
     """
     is_decode_y = True if y is not None else False
     full_dataset = np.hstack([X, y]) if is_decode_y else X
