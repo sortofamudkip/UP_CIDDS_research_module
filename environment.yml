@@ -1,0 +1,10 @@
+name: cidds-gan
+dependencies:
+  - python=3.10.9
+  - numpy
+  - pandas
+  - matplotlib
+  - pytest
+  - tensorflow
+  - scikit-learn
+  - python-dotenv
