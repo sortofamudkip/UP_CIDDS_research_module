@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import Perceptron
 
 
 def y_train_test_split_summary(y, y_train, y_test, y_encoder):
@@ -111,4 +112,11 @@ def tree_train_predict(
     X_train, X_test, y_train, y_test, y_encoder, **kwargs
 ) -> np.array:
     clf = DecisionTreeClassifier(random_state=555, **kwargs).fit(X_train, y_train)
+    return clf.predict(X_test)
+
+
+def tree_perceptron_predict(
+    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+) -> np.array:
+    clf = Perceptron(random_state=555, **kwargs).fit(X_train, y_train)
     return clf.predict(X_test)
