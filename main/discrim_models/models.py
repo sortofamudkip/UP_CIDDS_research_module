@@ -118,5 +118,9 @@ def tree_train_predict(
 def tree_perceptron_predict(
     X_train, X_test, y_train, y_test, y_encoder, **kwargs
 ) -> np.array:
-    clf = Perceptron(random_state=555, **kwargs).fit(X_train, y_train)
-    return clf.predict(X_test)
+    try:
+        clf = Perceptron(random_state=555, **kwargs).fit(X_train, y_train)
+        return clf.predict(X_test)
+    except ValueError:
+        print("Perceptron ran into an error. again.")
+        return None

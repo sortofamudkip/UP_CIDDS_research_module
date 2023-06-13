@@ -205,7 +205,11 @@ def get_N_WGAN_GP_preprocessed_data(
 
 def get_preprocessed_dataframe(full_X, y, y_encoder, x_labels):
     full_X = pd.DataFrame(full_X, columns=x_labels)
-    y_labels = [f"y_{label}" for label in y_encoder.classes_]
+    y_labels = (
+        [f"y_{label}" for label in y_encoder.classes_]
+        if len(y_encoder.classes_) != 2
+        else ["y"]
+    )
     full_y = pd.DataFrame(y, columns=y_labels)
     full_df = pd.concat([full_X, full_y], axis=1)
     return full_df
@@ -291,7 +295,7 @@ def get_B_WGAN_GP_preprocessed_data(
         )
         x_labels += (
             [f"0bSrcIP{i+1}" for i in range(32)]
-            + [f"0bSrcIP{i+1}" for i in range(32)]
+            + [f"0bDstIP{i+1}" for i in range(32)]
             + days_of_week_labels
             + ["day_seconds"]
         )

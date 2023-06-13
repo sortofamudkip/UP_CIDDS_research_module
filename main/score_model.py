@@ -41,3 +41,7 @@ def multiclass_stats(y_true, y_pred, title):
         index=[title],
     )
     return stats
+
+
+def multiclass_f1score_macro(y_true, y_pred):
+    return f1_score(y_true, y_pred, average="macro")

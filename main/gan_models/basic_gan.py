@@ -12,10 +12,6 @@ from ..preprocess_data import decode_N_WGAN_GP
 from pathlib import Path
 
 
-# import wandb
-# from wandb.keras import WandbMetricsLogger  # , WandbModelCheckpoint
-
-
 class BasicGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim: int):
         super().__init__()
@@ -39,24 +35,30 @@ class BasicGAN(keras.Model):
         self.loss_fn = loss_fn
 
     def train_step(self, data):
-        # Unpack the data.
+        # Unpack the real data.
+        # #TODO: for CGANs,
+        #        we PROBABLY don't need to add another set of one-hot encoded y labels,
+        #        since the data already has both X and Y.
+        #        or maybe it makes it better? who knows. Have to do more research.
         real_samples = data
         ################################
         # Generate fake data (train D) #
         ################################
         batch_size = tf.shape(real_samples)[0]
+        # note: self.latent_dim is numcols(X) + numcols(Y), i.e. one actual row.
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
+        # note: for CGAN, noise_for_generator will also have the one-hot encoded y labels concatenated.
+        #       note that this goes BEFORE the latent space is fed into the generator.
         noise_for_generator = random_latent_vectors
-        # noise_for_generator = tf.concat( # this is not needed until CGAN
-        #     [random_latent_vectors, one_hot_labels], axis=1
-        # )
+
         # Generate synthetic data
         generated_images = self.generator(noise_for_generator)
 
         # stack rows of real and fake data to form the training set's X
         all_samples = tf.concat((real_samples, generated_images), axis=0)
         # stack rows of real and fake labels to form the training set's y.
-        # real is 1, fake is 0
+        #   real is 1, fake is 0
+        #   note: for CGAN, we don't need to touch this, since CGAN just involves increasing number of cols (not rows).
         all_samples_labels = tf.concat(
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
@@ -76,6 +78,8 @@ class BasicGAN(keras.Model):
         # Generate fake data (train G) #
         ################################
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
+        # note: for CGAN, noise_for_generator will also have the one-hot encoded y labels concatenated.
+        #       note that this goes BEFORE the latent space is fed into the generator.
         random_vector_labels = random_latent_vectors
         # random_vector_labels = tf.concat(
         #     [random_latent_vectors, one_hot_labels], axis=1
@@ -84,14 +88,11 @@ class BasicGAN(keras.Model):
         ################################
         #       Train Generator        #
         ################################
-        ## if D's output (prob) is close to 1, then D thinks that generated_samples is REAL data, i.e. G is doing a good job
-        ## if D's output (prob) is close to 0, then D thinks that generated_samples is FAKE data, i.e. G is doing a bad job
-        ## if D did well (G did badly), G's loss will be high, so we need to update it a lot
-        ## if D did badly (G did well), G's loss will be low, so we don't need to update it that much
-        # Assemble labels that say "all real images", even all samples here are fake.
+        # Assemble labels that say "all real images", even though all samples here are fake.
         misleading_labels = tf.ones((batch_size, 1))
         with tf.GradientTape() as tape:
             generated_samples = self.generator(random_vector_labels)
+            # TODO: for CGAN, the discriminator also takes the one-hot encoded Y as well.
             predictions = self.discriminator(generated_samples)
             g_loss = self.loss_fn(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
@@ -116,9 +117,11 @@ class BasicGANPipeline(GenericPipeline):
         dataset_filename: str,
         decoding_func,  # currently either decode_N_WGAN_GP or decode_B_WGAN_GP
         pipeline_name: str,  # name of the pipeline, for saving models/datasets.
+        # generator_output_types: tuple, # a tuple of which methods the generator should use for the final activation.
+        #                                  Each element is either "relu" or "sigmoid", where "sigmoid" is for one-hot encoded labels and "relu" for everything else.
+        #                                  Used in the get_generator_final_layer() function.
         subset=0.25,
         batch_size: int = 128,
-        use_wandb: bool = False,
     ) -> None:
         super().__init__()
         self.subset = subset
@@ -142,9 +145,7 @@ class BasicGANPipeline(GenericPipeline):
         self.discriminator = self.get_discriminator()
         self.generator = self.get_generator()
         self.gan = self.get_GAN()
-        self.use_wandb = use_wandb
-        if use_wandb:
-            self.init_wandb()
+
         self.create_results_dir()
 
     def create_results_dir(self):
@@ -153,19 +154,56 @@ class BasicGANPipeline(GenericPipeline):
             output_dir.mkdir(parents=True, exist_ok=False)
             print(f"Created output dir {output_dir}.")
         except FileExistsError:
-            print(f"Dir {output_dir} already exists!")
+            print(f"Dir already exists: {output_dir} ")
             assert False
 
-    def init_wandb(self):
-        # wandb.init(
-        #     # set the wandb project where this run will be logged
-        #     project="GAN for CIDDS",
-        #     # track hyperparameters and run metadata
-        #     config={
-        #         "architecture": "GAN-basic",
-        #         "preprocessing": "N",
-        #     },
-        # )
+    def determine_generator_activations(
+        self, col_labels: list, y_col_num: int
+    ) -> np.array:
+        """Usage: determine_generator_activations(self.all_col_labels)
+
+        Args:
+            col_labels (list): self.all_col_labels
+            y_col_num (int): self.y.shape[1]
+
+        Returns:
+            np.array: bool array, true = use sigmoid, false = use relu.
+        """
+        y_indices = list(
+            range(len(col_labels) - 1, len(col_labels) - y_col_num - 1, -1)
+        )
+        x_sigmoid_indices = [
+            i for i in range(len(col_labels)) if col_labels[i].startswith("is_")
+        ]
+        all_sigmoid_indices = np.array(x_sigmoid_indices + y_indices)
+        bool_array = np.zeros(len(col_labels), dtype=int)
+        bool_array[all_sigmoid_indices] = 1
+        return bool_array
+
+    def create_generator_final_layer(self, col_labels: list, y_col_num: int):
+        sigmoid_indices = self.determine_generator_activations(col_labels, y_col_num)
+        sigmoid_indices = tf.constant(sigmoid_indices, dtype=tf.int32)
+        sigmoid_indices = tf.cast(sigmoid_indices, dtype=tf.bool)
+
+        class FinalActivation(keras.layers.Layer):
+            def __init__(self):
+                super().__init__()
+
+            def call(self, inputs):
+                return tf.where(
+                    sigmoid_indices,
+                    tf.keras.activations.sigmoid(inputs),
+                    tf.keras.activations.relu(inputs),
+                )
+
+        return FinalActivation()
+
+    def get_generator_final_layer(self, generator_output_types: tuple):
+        """Defines the final layer of the generator.
+
+        Args:
+            generator_output_types (tuple): Each element is either "relu" or "sigmoid", where "sigmoid" is for one-hot encoded labels and "relu" for everything else.
+        """
         pass
 
     def load_data(self, filename: str):
@@ -177,7 +215,11 @@ class BasicGANPipeline(GenericPipeline):
             self.X = X
             self.y = y
             self.X_colnames = X_colnames
-            self.y_colnames = [f"y_is_{c}" for c in y_encoder.classes_]
+            self.y_colnames = (  # if y is binary labels, y.shape[1] == 1
+                [f"y_is_{c}" for c in y_encoder.classes_]
+                if len(y_encoder.classes_) != 2
+                else ["y"]
+            )
             self.all_col_labels = self.X_colnames + self.y_colnames
             self.X_encoders = X_encoders
             self.y_encoder = y_encoder
@@ -223,6 +265,9 @@ class BasicGANPipeline(GenericPipeline):
         return discriminator
 
     def get_generator(self):
+        final_layer = self.create_generator_final_layer(
+            self.all_col_labels, self.y.shape[1]
+        )
         generator = keras.Sequential(
             [
                 keras.layers.Dense(64, activation="relu", input_shape=(self.num_cols,)),
@@ -230,6 +275,8 @@ class BasicGANPipeline(GenericPipeline):
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(self.num_cols),  # number of features
+                # TODO: add activation here
+                final_layer,
             ],
             name="generator",
         )
@@ -265,9 +312,7 @@ class BasicGANPipeline(GenericPipeline):
                     decoder_func=self.decode_samples_to_human_format,
                     pipeline_name=self.pipeline_name,
                 ),
-            ]
-            # + [WandbMetricsLogger()]
-            # if self.use_wandb else [],
+            ],
         )
         return self.history
 
