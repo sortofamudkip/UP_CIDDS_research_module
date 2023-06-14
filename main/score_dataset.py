@@ -16,16 +16,30 @@ from pathlib import Path
 ############################################################
 
 
-# "Test  (Ring et al 2018)"
+# "Test 1 (Ring et al 2018)"
+def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int) -> float:
+    if not all(col in data.columns for col in ("Proto", "class", "Flags")):
+        return None  # skip test
+    subset = data[(data["Proto"] == "UDP")]
+    if len(subset) == 0:
+        return False
+    condition = subset["Flags"] == "......"
+    return condition.sum() / len(subset)
+
+
+# Test 2 is not implemented because it's not applicable to the external dataset
+
+
+# "Test 3 (Ring et al 2018)"
 def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
     subset = data[
         (
-            (data.SrcPt == 80)
-            | (data.SrcPt == 443)
-            | (data.DstPt == 80)
-            | (data.DstPt == 443)
+            (data.SrcPt == 80)  # HTTP
+            | (data.SrcPt == 443)  # HTTPS
+            | (data.DstPt == 80)  # HTTP
+            | (data.DstPt == 443)  # HTTPS
         )
         & (data["class"] == "normal")
     ]
@@ -35,6 +49,15 @@ def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
     return condition.sum() / len(subset)
 
 
+# Test 4 returns False on the external dataset (see below)
+
+# Test 5 is not implemented because it's not applicable to the external dataset
+
+
+# Test 6 is not implemented because it's not applicable to the external dataset
+
+
+# "Test 7 (Ring et al 2018)"
 def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("Proto", "Packets", "Bytes")):
         return None  # skip test
@@ -47,11 +70,18 @@ def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
     Bytes = subset.Bytes
     condition = (
         ((Packets > 0) & (Bytes > 0))
-        & ((20 * Packets) <= Bytes)
+        & ((42 * Packets) <= Bytes)
         & (Bytes <= (65535 * Packets))
     )
     # return subset[ ~condition ][ ["Packets", "Bytes", "class"] ]
     return condition.sum() / len(subset)
+
+
+############################################################
+#                                                          #
+#        Self-written tests (pass external dataset)        #
+#                                                          #
+############################################################
 
 
 def score_IPs_in_range(data: pd.DataFrame, num_classes: int) -> float:
@@ -61,13 +91,6 @@ def score_IPs_in_range(data: pd.DataFrame, num_classes: int) -> float:
     dstIPs_valid = data["DstIP"].apply(_validate_ipv4)
     condition = srcIPs_valid & dstIPs_valid
     return condition.sum() / len(data)
-
-
-############################################################
-#                                                          #
-#        Self-written tests (pass external dataset)        #
-#                                                          #
-############################################################
 
 
 def score_numerics_valid(data: pd.DataFrame, num_classes: int) -> float:
@@ -120,18 +143,8 @@ def score_diversity(data: pd.DataFrame, num_classes: int) -> float:
 ############################################################
 
 
-# "Test 1 (Ring et al 2018)"
-def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int) -> float:
-    if not all(col in data.columns for col in ("Proto", "class", "Flags")):
-        return None  # skip test
-    subset = data[(data["Proto"] == "UDP") & (data["class"] == "normal")]
-    if len(subset) == 0:
-        return False
-    condition = subset["Flags"] == "......"
-    return condition.sum() / len(subset)
-
-
 # "Test 4 (Ring et al 2018)"
+# This test fails because there subset is empty, i.e. it returns False.
 def score_normal_dns_is_UDP(data: pd.DataFrame, num_classes: int) -> float:
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
@@ -161,6 +174,7 @@ def _validate_ipv4(ip: str) -> bool:
 
 
 LIST_OF_REALISTIC_DATASET_TESTS = {
+    "score_if_udp_no_tcp_flags": score_if_udp_no_tcp_flags,
     "score_normal_http_is_tcp": score_normal_http_is_tcp,
     "score_packet_size": score_packet_size,
     "score_IPs_in_range": score_IPs_in_range,
@@ -170,12 +184,12 @@ LIST_OF_REALISTIC_DATASET_TESTS = {
 }
 
 
-def score_data_plausibility_detailed(data):
+def score_data_plausibility_detailed(data, num_classes: int):
     report = {
-        scorename: [scorefunc(data)]
+        scorename: [scorefunc(data, num_classes)]
         for scorename, scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.items()
     }
-    return pd.DataFrame(report)
+    return pd.DataFrame(report).rename({0: "score"})
 
 
 def score_data_plausibility_single(data, num_classes: int, verbose=True):
