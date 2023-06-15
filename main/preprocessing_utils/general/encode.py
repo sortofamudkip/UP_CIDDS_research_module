@@ -16,7 +16,7 @@ def one_hot_encode_Proto(data: pd.Series) -> np.array:
         np.array: np.array of shape (num_rows, 4).
     """
     protocols = data.to_numpy().reshape(-1, 1)
-    enc = OneHotEncoder()
+    enc = OneHotEncoder(categories=[["GRE", "ICMP", "TCP", "UDP"]])
     enc.fit(protocols)
     # print("categories:", enc.categories_)
     return (
@@ -34,7 +34,7 @@ def one_hot_encode_TCP_Flags(data: pd.Series) -> np.array:
         data (pd.Series): _description_
 
     Returns:
-        np.array: np.array of shape (num_rows, 4).
+        np.array: np.array of shape (num_rows, 6).
     """
     onehotencoded = (
         data.str.split("", expand=True)
