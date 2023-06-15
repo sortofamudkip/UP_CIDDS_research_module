@@ -4,7 +4,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import Perceptron
+from sklearn.linear_model import Perceptron, LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 
 def y_train_test_split_summary(y, y_train, y_test, y_encoder):
@@ -124,3 +125,17 @@ def tree_perceptron_predict(
     except ValueError:
         print("Perceptron ran into an error. again.")
         return None
+
+
+def random_forest_train_predict(
+    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+) -> np.array:
+    clf = RandomForestClassifier(random_state=555, **kwargs).fit(X_train, y_train)
+    return clf.predict(X_test)
+
+
+def logistic_reg_train_predict(
+    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+) -> np.array:
+    clf = LogisticRegression(random_state=555, **kwargs).fit(X_train, y_train)
+    return clf.predict(X_test)
