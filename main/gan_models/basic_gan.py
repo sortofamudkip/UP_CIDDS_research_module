@@ -275,7 +275,6 @@ class BasicGANPipeline(GenericPipeline):
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(self.num_cols),  # number of features
-                # TODO: add activation here
                 final_layer,
             ],
             name="generator",
@@ -308,7 +307,7 @@ class BasicGANPipeline(GenericPipeline):
                 EvaluateSyntheticDataRealisticnessCallback(
                     self.gan,
                     generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=int(self.X.shape[0] * 0.5),
+                    num_samples_to_generate=int(self.X.shape[0]),
                     decoder_func=self.decode_samples_to_human_format,
                     pipeline_name=self.pipeline_name,
                 ),
