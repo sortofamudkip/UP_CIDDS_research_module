@@ -10,6 +10,17 @@ from pandas import DataFrame
 
 
 def binary_stats(y_true, y_pred, title, y_encoder, pos_label="attacker"):
+    if isinstance(y_pred, bool) and not y_pred:
+        return DataFrame(
+            {
+                "accuracy": [0],
+                "precision": [0],
+                "recall": [0],
+                "f1_score": [0],
+                "confusion_matrix": ["only one class"],
+            },
+            index=[title],
+        )
     precision, recall, f1, _ = precision_recall_fscore_support(
         y_true, y_pred, pos_label=pos_label, zero_division=0, average="binary"
     )
