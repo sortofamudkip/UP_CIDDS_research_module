@@ -137,8 +137,5 @@ def random_forest_train_predict(
 def logistic_reg_train_predict(
     X_train, X_test, y_train, y_test, y_encoder, **kwargs
 ) -> np.array:
-    if len(np.unique(y_train)) == 1:
-        print("y only has one unique label!")
-        return False
     clf = LogisticRegression(random_state=555, **kwargs).fit(X_train, y_train)
     return clf.predict(X_test)
