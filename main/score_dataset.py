@@ -197,10 +197,13 @@ def score_data_plausibility_single(data, num_classes: int, verbose=True):
         scorefunc(data, num_classes)
         for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()
     ]
+    report_dict = dict(
+        [(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]
+    )
     if verbose:
-        print(
-            f"report: {[(name, r) for r, name in zip(report, LIST_OF_REALISTIC_DATASET_TESTS.keys())]}"
-        )
+        print(f"report: {report_dict}")
+    if "score_diversity" in report_dict and report_dict["score_diversity"] == 0:
+        print("\t⚠️ Warning: only one unique label!")
     report = [score for score in report if not (score is None or score is False)]
     return np.nanmean(np.array(report))
 
