@@ -146,7 +146,7 @@ class BasicGANPipeline(GenericPipeline):
         self.generator = self.get_generator()
         self.gan = self.get_GAN()
 
-        self.create_results_dir()
+        # self.create_results_dir()
 
     def create_results_dir(self):
         output_dir = Path(__file__).parent / "../../../results" / self.pipeline_name
@@ -298,7 +298,7 @@ class BasicGANPipeline(GenericPipeline):
                 learning_rate=learning_rate, beta_1=beta_1
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
-            custom_metrics=[self.domain_knowledge_score],
+            # custom_metrics=[self.domain_knowledge_score],
         )
         self.history = self.gan.fit(
             self.dataset,
@@ -307,11 +307,12 @@ class BasicGANPipeline(GenericPipeline):
                 EvaluateSyntheticDataRealisticnessCallback(
                     self.gan,
                     generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=int(self.X.shape[0]),
+                    num_samples_to_generate=int(self.X.shape[0] * 0.8),
                     decoder_func=self.decode_samples_to_human_format,
                     pipeline_name=self.pipeline_name,
                 ),
             ],
+            verbose=2,
         )
         return self.history
 
