@@ -121,4 +121,7 @@ def run_pipeline(
             summary_df = eval_dataset(
                 pipeline_name, num_epochs, gan_pipeline, X_test, y_test, num_classes
             )
-            return summary_df
+    return {
+        "summary_df": summary_df,
+        "gan": gan_pipeline,
+    }
