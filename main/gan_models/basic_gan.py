@@ -173,7 +173,9 @@ class BasicGANPipeline(GenericPipeline):
             range(len(col_labels) - 1, len(col_labels) - y_col_num - 1, -1)
         )
         x_sigmoid_indices = [
-            i for i in range(len(col_labels)) if col_labels[i].startswith("is_")
+            i
+            for i in range(len(col_labels))
+            if col_labels[i].startswith("is_") or col_labels[i].startswith("0b")
         ]
         all_sigmoid_indices = np.array(x_sigmoid_indices + y_indices)
         bool_array = np.zeros(len(col_labels), dtype=int)
@@ -197,14 +199,6 @@ class BasicGANPipeline(GenericPipeline):
                 )
 
         return FinalActivation()
-
-    def get_generator_final_layer(self, generator_output_types: tuple):
-        """Defines the final layer of the generator.
-
-        Args:
-            generator_output_types (tuple): Each element is either "relu" or "sigmoid", where "sigmoid" is for one-hot encoded labels and "relu" for everything else.
-        """
-        pass
 
     def load_data(self, filename: str):
         ################################
