@@ -8,7 +8,8 @@ from ..score_dataset import (
     EvaluateSyntheticDataRealisticnessCallback,
     score_data_plausibility_single,
 )
-from ..preprocess_data import decode_N_WGAN_GP
+
+# from ..preprocess_data import decode_N_WGAN_GP
 from pathlib import Path
 
 
