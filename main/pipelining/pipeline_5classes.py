@@ -108,12 +108,12 @@ def eval_5classes(
     )
 
     summary_df[["plaus_score"]].plot(
-        title="Plausibility score, N preprocessing, 5 classes",
+        title="Plausibility score, 5 classes",
         ylabel="Plaus. score",
         xlabel="Epoch",
     ).get_figure().savefig(f"results/{pipeline_name}/plaus.jpg")
     summary_df[["TSTR_tree_f1", "TSTR_perceptron_f1"]].plot(
-        title="TSTR F1 scores, N preprocessing, 5 classes",
+        title="TSTR F1 scores, 5 classes",
         ylabel="F1 score",
         xlabel="Epoch",
     ).get_figure().savefig(f"results/{pipeline_name}/f1.jpg")

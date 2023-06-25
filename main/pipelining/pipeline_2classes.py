@@ -110,12 +110,12 @@ def eval_2classes(
     )
 
     summary_df[["plaus_score"]].plot(
-        title="Plausibility score, N preprocessing, 2 classes",
+        title="Plausibility score, 2 classes",
         ylabel="Plaus. score",
         xlabel="Epoch",
     ).get_figure().savefig(f"results/{pipeline_name}/plaus.jpg")
     summary_df[["TSTR_tree_f1", "TSTR_perceptron_f1"]].plot(
-        title="TSTR F1 scores, N preprocessing, 2 classes",
+        title="TSTR F1 scores, 2 classes",
         ylabel="F1 score",
         xlabel="Epoch",
     ).get_figure().savefig(f"results/{pipeline_name}/f1.jpg")
