@@ -92,12 +92,16 @@ def decode_B_WGAN_GP(
 
     # decode Bytes
     bytes_names = [f"0bBytes{i}" for i in range(1, 32 + 1)]
-    full_df["Bytes"] = B_decoder._decode_n_bits_cols(full_df[bytes_names], 32)
+    full_df["Bytes"] = B_decoder._decode_n_bits_cols(full_df[bytes_names], 32).astype(
+        int
+    )
+    full_df["Bytes"] = full_df["Bytes"].astype(int)
     full_df.drop(bytes_names, axis=1, inplace=True)
 
     # decode Packets
     packet_names = [f"0bPackets{i}" for i in range(1, 32 + 1)]
     full_df["Packets"] = B_decoder._decode_n_bits_cols(full_df[packet_names], 32)
+    full_df["Packets"] = full_df["Packets"].astype(int)
     full_df.drop(packet_names, axis=1, inplace=True)
 
     # decode TCP flags
