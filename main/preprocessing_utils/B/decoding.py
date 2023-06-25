@@ -20,15 +20,16 @@ def _decode_B_WGAN_GP_ips(thirtytwo_cols):
     return first + "." + second + "." + third + "." + fourth
 
 
-def _decode_n_bits_cols(binary_cols: pd.DataFrame, binary_length: int) -> pd.Series:
+def _decode_n_bits_cols(cols: pd.DataFrame, binary_length: int) -> pd.Series:
     binaries = np.array([1 << n for n in range(binary_length - 1, -1, -1)])
+    binary_cols = np.where(cols < 0.5, 0, 1)
     result = (binary_cols * binaries).sum(axis=1)
-    return result
+    return result.astype("uint32")
 
 
 def _decode_B_WGAN_GP_ports(sixteen_cols):
     result = _decode_n_bits_cols(sixteen_cols, 16)
-    return result.astype(int)
+    return result
 
 
 def decode_B_WGAN_GP(
@@ -92,16 +93,12 @@ def decode_B_WGAN_GP(
 
     # decode Bytes
     bytes_names = [f"0bBytes{i}" for i in range(1, 32 + 1)]
-    full_df["Bytes"] = B_decoder._decode_n_bits_cols(full_df[bytes_names], 32).astype(
-        int
-    )
-    full_df["Bytes"] = full_df["Bytes"].astype(int)
+    full_df["Bytes"] = B_decoder._decode_n_bits_cols(full_df[bytes_names], 32)
     full_df.drop(bytes_names, axis=1, inplace=True)
 
     # decode Packets
     packet_names = [f"0bPackets{i}" for i in range(1, 32 + 1)]
     full_df["Packets"] = B_decoder._decode_n_bits_cols(full_df[packet_names], 32)
-    full_df["Packets"] = full_df["Packets"].astype(int)
     full_df.drop(packet_names, axis=1, inplace=True)
 
     # decode TCP flags
