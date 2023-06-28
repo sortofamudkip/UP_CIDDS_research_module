@@ -17,8 +17,11 @@ from pathlib import Path
 
 
 # "Test 1 (Ring et al 2018)"
+# note: we don't need to check label because UDP physically cannot have TCP flags,
+#       due to the nature of UDP headers.
+#       See: https://en.wikipedia.org/wiki/User_Datagram_Protocol
 def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int) -> float:
-    if not all(col in data.columns for col in ("Proto", "class", "Flags")):
+    if not all(col in data.columns for col in ("Proto", "Flags")):
         return None  # skip test
     subset = data[(data["Proto"] == "UDP")]
     if len(subset) == 0:
@@ -53,7 +56,6 @@ def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
 
 # Test 5 is not implemented because it's not applicable to the external dataset
 
-
 # Test 6 is not implemented because it's not applicable to the external dataset
 
 
@@ -66,7 +68,7 @@ def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
     ]
     if len(subset) == 0:
         return False
-    Packets = subset.Packets.astype(np.int64)
+    Packets = subset.Packets.astype(np.int64)  # since 65535 * might overflow if int32
     Bytes = subset.Bytes
     condition = (
         ((Packets > 0) & (Bytes > 0))
