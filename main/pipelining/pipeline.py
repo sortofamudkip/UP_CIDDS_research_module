@@ -43,7 +43,7 @@ def eval_dataset(
     y_test: np.array,
     num_classes: int,
 ) -> pd.DataFrame:
-    assert num_classes in (2, 5)
+    assert num_classes in (2, 5), "Number of classes can only be 2 or 5"
     summary_df = (
         eval_2classes(pipeline_name, num_epochs, gan_pipeline, X_test, y_test)
         if num_classes == 2
