@@ -33,7 +33,7 @@ def _decode_B_WGAN_GP_ports(sixteen_cols):
 
 
 def decode_B_WGAN_GP(
-    X, y, y_encoder, X_labels, X_encoders, is_decode_y=True
+    X, y, y_encoder, X_labels, X_encoders, is_decode_y=True, is_decode_IP_dates=False
 ) -> pd.DataFrame:
     is_decode_y = True if y is not None else False
     full_dataset = np.hstack([X, y]) if is_decode_y else X
@@ -53,33 +53,6 @@ def decode_B_WGAN_GP(
     proto_names = ["is_" + p for p in X_encoders["Protocols"].categories_[0]]
     full_df["Proto"] = X_encoders["Protocols"].inverse_transform(full_df[proto_names])
     full_df.drop(proto_names, axis=1, inplace=True)
-
-    # decode date first seen
-    full_df["day_seconds"] *= 86400
-    time_to_str = full_df["day_seconds"].apply(
-        lambda x: str(timedelta(seconds=round(x)))
-    )
-
-    days_names = X_encoders["Date_first_seen"].categories_[0]
-    full_df["Date_first_seen"] = X_encoders["Date_first_seen"].inverse_transform(
-        full_df[days_names]
-    )
-
-    full_df["Date_first_seen"] = (
-        full_df["Date_first_seen"].apply(lambda x: x[3:]) + " " + time_to_str
-    )  # x[3:] should be removeprefix("is_")
-    full_df.drop(days_names, axis=1, inplace=True)
-    full_df.drop("day_seconds", axis=1, inplace=True)
-
-    # decode source IPs
-    srcIP_names = [f"0bSrcIP{i}" for i in range(1, 32 + 1)]
-    full_df["SrcIP"] = B_decoder._decode_B_WGAN_GP_ips(full_df[srcIP_names])
-    full_df.drop(srcIP_names, axis=1, inplace=True)
-
-    # decode dest IPs
-    dstIP_names = [f"0bDstIP{i}" for i in range(1, 32 + 1)]
-    full_df["DstIP"] = B_decoder._decode_B_WGAN_GP_ips(full_df[dstIP_names])
-    full_df.drop(dstIP_names, axis=1, inplace=True)
 
     # decode SrcPt
     srcport_names = [f"0bSrcPt{i}" for i in range(1, 16 + 1)]
@@ -108,26 +81,52 @@ def decode_B_WGAN_GP(
     )
     full_df.drop(flag_names, axis=1, inplace=True)
 
+    if is_decode_IP_dates:
+        # decode date first seen
+        full_df["day_seconds"] *= 86400
+        time_to_str = full_df["day_seconds"].apply(
+            lambda x: str(timedelta(seconds=round(x)))
+        )
+
+        days_names = X_encoders["Date_first_seen"].categories_[0]
+        full_df["Date_first_seen"] = X_encoders["Date_first_seen"].inverse_transform(
+            full_df[days_names]
+        )
+
+        full_df["Date_first_seen"] = (
+            full_df["Date_first_seen"].apply(lambda x: x[3:]) + " " + time_to_str
+        )  # x[3:] should be removeprefix("is_")
+        full_df.drop(days_names, axis=1, inplace=True)
+        full_df.drop("day_seconds", axis=1, inplace=True)
+
+        # decode source IPs
+        srcIP_names = [f"0bSrcIP{i}" for i in range(1, 32 + 1)]
+        full_df["SrcIP"] = B_decoder._decode_B_WGAN_GP_ips(full_df[srcIP_names])
+        full_df.drop(srcIP_names, axis=1, inplace=True)
+
+        # decode dest IPs
+        dstIP_names = [f"0bDstIP{i}" for i in range(1, 32 + 1)]
+        full_df["DstIP"] = B_decoder._decode_B_WGAN_GP_ips(full_df[dstIP_names])
+        full_df.drop(dstIP_names, axis=1, inplace=True)
+
     # decode class
     if is_decode_y:
         full_df["class"] = y_encoder.inverse_transform(
             full_df[y_class_names].to_numpy()
         )
 
-    # rearrange classes
+    # reorder
     full_df = full_df[
         [
-            "Date_first_seen",
             "Duration",
             "Proto",
-            "SrcIP",
             "SrcPt",
-            "DstIP",
             "DstPt",
             "Packets",
             "Bytes",
             "Flags",
         ]
+        + (["Date_first_seen", "SrcIP", "DstIP"] if is_decode_IP_dates else [])
         + (["class"] if is_decode_y else [])
     ]
 
