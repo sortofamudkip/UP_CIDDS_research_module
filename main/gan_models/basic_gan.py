@@ -277,12 +277,11 @@ class BasicGANPipeline(GenericPipeline):
         return generator
 
     def get_GAN(self):
-        gan = BasicGAN(
+        return BasicGAN(
             discriminator=self.discriminator,
             generator=self.generator,
             latent_dim=self.num_cols,
         )
-        return gan
 
     def compile_and_fit_GAN(self, learning_rate=0.001, beta_1=0.9, epochs=2):
         self.gan.compile(
@@ -298,15 +297,16 @@ class BasicGANPipeline(GenericPipeline):
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            callbacks=[
-                EvaluateSyntheticDataRealisticnessCallback(
-                    self.gan,
-                    generate_samples_func=self.generate_samples,
-                    num_samples_to_generate=int(self.X.shape[0] * 0.8),
-                    decoder_func=self.decode_samples_to_human_format,
-                    pipeline_name=self.pipeline_name,
-                ),
-            ],
+            # don't generate samples every epoch anymore
+            # callbacks=[
+            #     EvaluateSyntheticDataRealisticnessCallback(
+            #         self.gan,
+            #         generate_samples_func=self.generate_samples,
+            #         num_samples_to_generate=int(self.X.shape[0] * 0.8),
+            #         decoder_func=self.decode_samples_to_human_format,
+            #         pipeline_name=self.pipeline_name,
+            #     ),
+            # ],
             verbose=2,
         )
         return self.history
