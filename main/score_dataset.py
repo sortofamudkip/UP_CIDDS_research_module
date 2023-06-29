@@ -20,36 +20,45 @@ from pathlib import Path
 # note: we don't need to check label because UDP physically cannot have TCP flags,
 #       due to the nature of UDP headers.
 #       See: https://en.wikipedia.org/wiki/User_Datagram_Protocol
-def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int) -> float:
+def score_if_udp_no_tcp_flags(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("Proto", "Flags")):
         return None  # skip test
-    subset = data[(data["Proto"] == "UDP")]
-    if len(subset) == 0:
-        return False
-    condition = subset["Flags"] == "......"
-    return condition.sum() / len(subset)
+    prerequisite = data["Proto"] == "UDP"
+    if return_mask:
+        mask = np.ones(len(data), dtype=bool)  # all true
+        mask[prerequisite & (data["Flags"] != "......")] = False
+        return mask
+    else:
+        subset = data[prerequisite]
+        if len(subset) == 0:
+            return False
+        condition = subset["Flags"] == "......"
+        return condition.sum() / len(subset)
 
 
 # Test 2 is not implemented because it's not applicable to the external dataset
 
 
 # "Test 3 (Ring et al 2018)"
-def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
+def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
-    subset = data[
-        (
-            (data.SrcPt == 80)  # HTTP
-            | (data.SrcPt == 443)  # HTTPS
-            | (data.DstPt == 80)  # HTTP
-            | (data.DstPt == 443)  # HTTPS
-        )
-        & (data["class"] == "normal")
-    ]
-    if len(subset) == 0:
-        return False
-    condition = subset["Proto"] == "TCP"
-    return condition.sum() / len(subset)
+    prerequisite = (
+        (data.SrcPt == 80)  # HTTP
+        | (data.SrcPt == 443)  # HTTPS
+        | (data.DstPt == 80)  # HTTP
+        | (data.DstPt == 443)  # HTTPS
+    ) & (data["class"] == "normal")
+    if return_mask:
+        mask = np.ones(len(data), dtype=bool)  # all true
+        mask[prerequisite & (data["Proto"] != "TCP")] = False
+        return mask
+    else:
+        subset = data[prerequisite]
+        if len(subset) == 0:
+            return False
+        condition = subset["Proto"] == "TCP"
+        return condition.sum() / len(subset)
 
 
 # Test 4 returns False on the external dataset (see below)
@@ -60,23 +69,38 @@ def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int) -> float:
 
 
 # "Test 7 (Ring et al 2018)"
-def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
+def score_packet_size(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("Proto", "Packets", "Bytes")):
         return None  # skip test
-    subset = data[
-        ((data.Proto == "TCP") | (data.Proto == "UDP") | (data.Proto == "ICMP"))
-    ]
-    if len(subset) == 0:
-        return False
-    Packets = subset.Packets.astype(np.int64)  # since 65535 * might overflow if int32
-    Bytes = subset.Bytes
-    condition = (
-        ((Packets > 0) & (Bytes > 0))
-        & ((42 * Packets) <= Bytes)
-        & (Bytes <= (65535 * Packets))
+    prerequisite = (
+        (data.Proto == "TCP") | (data.Proto == "UDP") | (data.Proto == "ICMP")
     )
-    # return subset[ ~condition ][ ["Packets", "Bytes", "class"] ]
-    return condition.sum() / len(subset)
+    if return_mask:
+        mask = np.ones(len(data), dtype=bool)  # all true
+        mask[
+            prerequisite
+            & ~(
+                ((data.Packets > 0) & (data.Bytes > 0))
+                & ((42 * data.Packets) <= data.Bytes)
+                & (data.Bytes <= (65535 * data.Packets))
+            )
+        ] = False
+        return mask
+
+    else:
+        subset = data[prerequisite]
+        if len(subset) == 0:
+            return False
+        Packets = subset.Packets.astype(
+            np.int64
+        )  # since 65535 * might overflow if int32
+        Bytes = subset.Bytes
+        condition = (
+            ((Packets > 0) & (Bytes > 0))
+            & ((42 * Packets) <= Bytes)
+            & (Bytes <= (65535 * Packets))
+        )
+        return condition.sum() / len(subset)
 
 
 ############################################################
@@ -86,26 +110,26 @@ def score_packet_size(data: pd.DataFrame, num_classes: int) -> float:
 ############################################################
 
 
-def score_IPs_in_range(data: pd.DataFrame, num_classes: int) -> float:
+def score_IPs_in_range(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("SrcIP", "DstIP")):
         return None  # skip test
     srcIPs_valid = data["SrcIP"].apply(_validate_ipv4)
     dstIPs_valid = data["DstIP"].apply(_validate_ipv4)
     condition = srcIPs_valid & dstIPs_valid
-    return condition.sum() / len(data)
+    return condition.sum() / len(data) if not return_mask else condition
 
 
-def score_numerics_valid(data: pd.DataFrame, num_classes: int) -> float:
+def score_numerics_valid(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("Duration", "Packets", "Bytes")):
         return None  # skip test
     subset = data[["Duration", "Packets", "Bytes"]]
     if len(subset) == 0:
         return False
     condition = (data.Duration >= 0) & (data.Packets > 0) & (data.Bytes > 0)
-    return condition.sum() / len(subset)
+    return condition.sum() / len(subset) if not return_mask else condition
 
 
-def score_ports_valid(data: pd.DataFrame, num_classes: int) -> float:
+def score_ports_valid(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("SrcPt", "DstPt")):
         return None  # skip test
     subset = data[["SrcPt", "DstPt"]]
@@ -117,10 +141,10 @@ def score_ports_valid(data: pd.DataFrame, num_classes: int) -> float:
         & (0 <= subset.DstPt)
         & (subset.DstPt <= 65535)
     )
-    return condition.sum() / len(subset)
+    return condition.sum() / len(subset) if not return_mask else condition
 
 
-def score_diversity(data: pd.DataFrame, num_classes: int) -> float:
+def score_diversity(data: pd.DataFrame, num_classes: int, return_mask=False):
     """Tests how diverse the y labels are.
     If only one class is present, this test scores 0.
     If all five classes are present, this test scores 1.0.
@@ -146,34 +170,30 @@ def score_diversity(data: pd.DataFrame, num_classes: int) -> float:
 
 
 # "Test 4 (Ring et al 2018)"
-# This test fails because there subset is empty, i.e. it returns False.
-def score_normal_dns_is_UDP(data: pd.DataFrame, num_classes: int) -> float:
+# This test fails because subset is empty, i.e. it returns False.
+def score_normal_dns_is_UDP(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("SrcPt", "class", "DstPt")):
         return None  # skip test
-    subset = data[
-        ((data.SrcPt == 53) | (data.DstPt == 53)) & (data["class"] == "normal")
-    ]
-    if len(subset) == 0:
-        return False
-    condition = subset["Proto"] == "UDP"
-    return condition.sum() / len(subset)
+    prerequisite = ((data.SrcPt == 53) | (data.DstPt == 53)) & (
+        data["class"] == "normal"
+    )
+    if return_mask:
+        mask = np.ones(len(data), dtype=bool)  # all true
+        mask[prerequisite & (data["Proto"] != "UDP")] = False
+        return mask
+    else:
+        subset = data[prerequisite]
+        if len(subset) == 0:
+            return False
+        condition = subset["Proto"] == "UDP"
+        return condition.sum() / len(subset)
 
 
 ############################################################
 #                                                          #
-#             Auxilliary functions / constants             #
+#              Scoring functions / constants               #
 #                                                          #
 ############################################################
-
-
-def _validate_ipv4(ip: str) -> bool:
-    m = re.match(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ip)
-    if not m:
-        return False
-    if len(m.groups()) != 4:
-        return False
-    return all(0 <= int(quartet) <= 255 for quartet in ip.split("."))
-
 
 LIST_OF_REALISTIC_DATASET_TESTS = {
     "score_if_udp_no_tcp_flags": score_if_udp_no_tcp_flags,
@@ -208,6 +228,11 @@ def score_data_plausibility_single(data, num_classes: int, verbose=True):
         print("\t⚠️ Warning: only one unique label!")
     report = [score for score in report if not (score is None or score is False)]
     return np.nanmean(np.array(report))
+
+
+def filter_plausible_rows(data, num_classes: int, verbose=True):
+    pass
+    # call tests in LIST_OF_REALISTIC_DATASET_TESTS with return_mask=True
 
 
 class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
@@ -249,4 +274,17 @@ class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
         # print(f"\trealistic dataset score: {score}")
 
 
-# class EvaluateSyntheticDataTSTRCallback(keras.callbacks.Callback):
+############################################################
+#                                                          #
+#             Auxilliary functions / constants             #
+#                                                          #
+############################################################
+
+
+def _validate_ipv4(ip: str) -> bool:
+    m = re.match(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ip)
+    if not m:
+        return False
+    if len(m.groups()) != 4:
+        return False
+    return all(0 <= int(quartet) <= 255 for quartet in ip.split("."))
