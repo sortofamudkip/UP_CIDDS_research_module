@@ -69,6 +69,8 @@ def score_normal_http_is_tcp(data: pd.DataFrame, num_classes: int, return_mask=F
 
 
 # "Test 7 (Ring et al 2018)"
+# note that the test in the paper is not completely correct.
+# the correct limits are
 def score_packet_size(data: pd.DataFrame, num_classes: int, return_mask=False):
     if not all(col in data.columns for col in ("Proto", "Packets", "Bytes")):
         return None  # skip test
@@ -76,13 +78,30 @@ def score_packet_size(data: pd.DataFrame, num_classes: int, return_mask=False):
         (data.Proto == "TCP") | (data.Proto == "UDP") | (data.Proto == "ICMP")
     )
     if return_mask:
+        Packets = data["Packets"]
+        Bytes = data["Bytes"]
         mask = np.ones(len(data), dtype=bool)  # all true
         mask[
             prerequisite
             & ~(
-                ((data.Packets > 0) & (data.Bytes > 0))
-                & ((42 * data.Packets) <= data.Bytes)
-                & (data.Bytes <= (65535 * data.Packets))
+                (((Packets > 0) & (Bytes > 0)))
+                & (
+                    (
+                        (data.Proto == "TCP")
+                        & ((40 * Packets) <= Bytes)
+                        & (Bytes <= (65535 * Packets))
+                    )
+                    | (
+                        (data.Proto == "UDP")
+                        & ((8 * Packets) <= Bytes)
+                        & (Bytes <= (65535 * Packets))
+                    )
+                    | (
+                        (data.Proto == "ICMP")
+                        & ((64 * Packets) <= Bytes)
+                        & (Bytes <= (65535 * Packets))
+                    )
+                )
             )
         ] = False
         return mask
@@ -95,11 +114,25 @@ def score_packet_size(data: pd.DataFrame, num_classes: int, return_mask=False):
             np.int64
         )  # since 65535 * might overflow if int32
         Bytes = subset.Bytes
-        condition = (
-            ((Packets > 0) & (Bytes > 0))
-            & ((42 * Packets) <= Bytes)
+        condition_tcp = (
+            (subset.Proto == "TCP")
+            & ((Packets > 0) & (Bytes > 0))
+            & ((40 * Packets) <= Bytes)
             & (Bytes <= (65535 * Packets))
         )
+        condition_udp = (
+            (subset.Proto == "UDP")
+            & ((Packets > 0) & (Bytes > 0))
+            & ((8 * Packets) <= Bytes)
+            & (Bytes <= (65535 * Packets))
+        )
+        condition_icmp = (
+            (subset.Proto == "ICMP")
+            & ((Packets > 0) & (Bytes > 0))
+            & ((64 * Packets) <= Bytes)
+            & (Bytes <= (65535 * Packets))
+        )
+        condition = condition_tcp | condition_udp | condition_icmp
         return condition.sum() / len(subset)
 
 
@@ -230,9 +263,28 @@ def score_data_plausibility_single(data, num_classes: int, verbose=True):
     return np.nanmean(np.array(report))
 
 
+def mask_plausible_rows(data, num_classes: int, verbose=True):
+    # note: num_classes is ignored since score_diversity is not tested
+    bool_cols = pd.concat(
+        [
+            pd.Series(scorefunc(data, num_classes, return_mask=True))
+            for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()
+            if scorefunc != score_diversity
+        ],
+        axis=1,
+    )
+    return bool_cols.all(axis=1)
+    # return [
+    #     scorefunc(data, num_classes, return_mask=True)
+    #     for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()
+    #     if scorefunc != score_diversity
+    # ],
+
+
 def filter_plausible_rows(data, num_classes: int, verbose=True):
-    pass
-    # call tests in LIST_OF_REALISTIC_DATASET_TESTS with return_mask=True
+    mask = mask_plausible_rows(data, num_classes, verbose)
+    valid_rows = data[mask]
+    return valid_rows
 
 
 class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
