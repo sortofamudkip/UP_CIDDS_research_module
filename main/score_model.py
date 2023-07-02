@@ -22,6 +22,13 @@ def mode_collapse_binary_stats(title):
     )
 
 
+def f1_stats_one_epoch(y_true, y_pred, num_classes: int, pos_label="attacker"):
+    if num_classes == 2:
+        return f1_score(y_true, y_pred, pos_label=pos_label)
+    elif num_classes == 5:
+        return f1_score(y_true, y_pred, average="weighted")
+
+
 def binary_stats(y_true, y_pred, title, y_encoder, pos_label="attacker"):
     precision, recall, f1, _ = precision_recall_fscore_support(
         y_true, y_pred, pos_label=pos_label, zero_division=0, average="binary"
