@@ -16,7 +16,7 @@ def one_hot_encode_Proto(data: pd.Series) -> np.array:
         np.array: np.array of shape (num_rows, 4).
     """
     protocols = data.to_numpy().reshape(-1, 1)
-    enc = OneHotEncoder(categories=[["GRE", "ICMP", "TCP", "UDP"]])
+    enc = OneHotEncoder(categories=[["ICMP", "TCP", "UDP"]])
     enc.fit(protocols)
     # print("categories:", enc.categories_)
     return (

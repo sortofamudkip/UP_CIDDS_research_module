@@ -118,8 +118,13 @@ def clean_data(dataset):
     return dataset
 
 
-def load_data(drop_date_IP):
-    return drop_unnecessary_columns(clean_data(load_data_raw()), drop_date_IP)
+def load_data(drop_date_IP, drop_misc_protocols):
+    data = drop_unnecessary_columns(clean_data(load_data_raw()), drop_date_IP)
+    return (
+        data[data["Proto"].isin(["ICMP", "TCP", "UDP"])]
+        if drop_misc_protocols
+        else data
+    )
 
 
 if __name__ == "__main__":
