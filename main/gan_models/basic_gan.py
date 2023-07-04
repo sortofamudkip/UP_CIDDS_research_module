@@ -7,6 +7,7 @@ import pandas as pd
 from ..score_dataset import (
     EvaluateSyntheticDataRealisticnessCallback,
     score_data_plausibility_single,
+    mask_plausible_rows,
 )
 
 # from ..preprocess_data import decode_N_WGAN_GP
@@ -323,6 +324,27 @@ class BasicGANPipeline(GenericPipeline):
         )  # (num_samples samples of noise, number of cols)
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples
+
+    def generate_n_plausible_samples(self, n_target_rows):
+        all_plausible_samples = []
+        cur_num_rows = 0
+        retention_scores = []
+
+        while cur_num_rows < n_target_rows:
+            samples_np = self.generate_samples(len(self.X))
+            samples_df = self.decode_samples_to_human_format(samples_np)
+
+            filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
+            plausible_samples = samples_np[filtered_mask]
+            all_plausible_samples.append(plausible_samples)
+
+            # update stats
+            retention_scores.append(len(plausible_samples) / len(self.X))
+            cur_num_rows += len(plausible_samples)
+
+        retention_scores = np.array(retention_scores)
+
+        return np.vstack(all_plausible_samples)[:n_target_rows], retention_scores
 
     def decode_samples_to_human_format(self, generated_samples):
         y_cols_len = self.get_y_cols_len()

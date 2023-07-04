@@ -267,7 +267,7 @@ def mask_plausible_rows(data, num_classes: int, verbose=True):
     # note: num_classes is ignored since score_diversity is not tested
     bool_cols = pd.concat(
         [
-            pd.Series(scorefunc(data, num_classes, return_mask=True))
+            pd.Series(scorefunc(data, num_classes, return_mask=True), dtype=float)
             for scorefunc in LIST_OF_REALISTIC_DATASET_TESTS.values()
             if scorefunc != score_diversity
         ],
@@ -284,7 +284,8 @@ def mask_plausible_rows(data, num_classes: int, verbose=True):
 def filter_plausible_rows(data, num_classes: int, verbose=True):
     mask = mask_plausible_rows(data, num_classes, verbose)
     valid_rows = data[mask]
-    return valid_rows
+    retention_ratio = len(valid_rows) / len(data)
+    return valid_rows, retention_ratio
 
 
 class EvaluateSyntheticDataRealisticnessCallback(keras.callbacks.Callback):
