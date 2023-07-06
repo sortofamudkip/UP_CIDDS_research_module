@@ -228,8 +228,9 @@ def score_normal_dns_is_UDP(data: pd.DataFrame, num_classes: int, return_mask=Fa
 #                                                          #
 ############################################################
 
+# score_if_udp_no_tcp_flags is turned off since already postprocessed
 LIST_OF_REALISTIC_DATASET_TESTS = {
-    "score_if_udp_no_tcp_flags": score_if_udp_no_tcp_flags,
+    # "score_if_udp_no_tcp_flags": score_if_udp_no_tcp_flags,
     "score_normal_http_is_tcp": score_normal_http_is_tcp,
     "score_packet_size": score_packet_size,
     "score_IPs_in_range": score_IPs_in_range,
