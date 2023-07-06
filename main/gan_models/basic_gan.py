@@ -9,6 +9,7 @@ from ..score_dataset import (
     score_data_plausibility_single,
     mask_plausible_rows,
 )
+from ..preprocessing_utils.general.postprocessing import postprocess_UDP_TCP_flags
 
 # from ..preprocess_data import decode_N_WGAN_GP
 from pathlib import Path
@@ -350,13 +351,15 @@ class BasicGANPipeline(GenericPipeline):
         y_cols_len = self.get_y_cols_len()
 
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
-        return self.decoding_func(
+        decoded_data = self.decoding_func(
             X,
             y,
             self.y_encoder,
             self.X_colnames,
             self.X_encoders,
         )
+        postprocessed = postprocess_UDP_TCP_flags(decoded_data)
+        return postprocessed
         # fake_y = np.zeros(num_samples).reshape(-1,1) # all 0s since we don't care atm
         # preprocessor.decode_N_WGAN_GP(X=generated_samples, y=fake_y, y_encoder=y_encoder, labels=labels, X_encoders=X_encoders)
 
