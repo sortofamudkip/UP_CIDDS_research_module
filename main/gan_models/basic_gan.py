@@ -143,7 +143,6 @@ class BasicGANPipeline(GenericPipeline):
         self.y_cols_len = self.get_y_cols_len()
         # ^ if latent_dim is not defined, set it to num_cols.
         self.latent_dim = latent_dim if latent_dim != 0 else num_cols
-        print(f"set latent dim to: {self.latent_dim}")
 
         self.dataset = train_loader
         self.num_cols = num_cols
@@ -175,7 +174,6 @@ class BasicGANPipeline(GenericPipeline):
         y_indices = list(
             range(len(col_labels) - 1, len(col_labels) - y_col_num - 1, -1)
         )
-        print(f"when y_col_num = {y_col_num}, y_indices is {y_indices}")
         x_sigmoid_indices = [
             i
             for i in range(len(col_labels))
