@@ -139,6 +139,7 @@ class BasicGANPipeline(GenericPipeline):
         self.X_encoders = None
         self.y_encoder = None
         train_loader, num_cols = self.load_data(dataset_filename)
+        self.y_cols_len = self.get_y_cols_len()
 
         self.dataset = train_loader
         self.num_cols = num_cols
@@ -364,7 +365,7 @@ class BasicGANPipeline(GenericPipeline):
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
         return X, self.y_encoder.inverse_transform(y), self.y_encoder
 
-    def get_y_cols_len(self):
+    def get_y_cols_len(self) -> int:
         # for whatever reason, if there are only 2 classes,
         # the number of columns in y is only 1 (instead of one-hot-encoded as 2).
         # so if there are only 2 classes, we only take the last col as y.
