@@ -120,9 +120,6 @@ class BasicGANPipeline(GenericPipeline):
         dataset_filename: str,
         decoding_func,  # currently either decode_N_WGAN_GP or decode_B_WGAN_GP
         pipeline_name: str,  # name of the pipeline, for saving models/datasets.
-        # generator_output_types: tuple, # a tuple of which methods the generator should use for the final activation.
-        #                                  Each element is either "relu" or "sigmoid", where "sigmoid" is for one-hot encoded labels and "relu" for everything else.
-        #                                  Used in the get_generator_final_layer() function.
         subset=0.25,
         batch_size: int = 128,
     ) -> None:
@@ -148,8 +145,6 @@ class BasicGANPipeline(GenericPipeline):
         self.discriminator = self.get_discriminator()
         self.generator = self.get_generator()
         self.gan = self.get_GAN()
-
-        # self.create_results_dir()
 
     def create_results_dir(self):
         output_dir = Path(__file__).parent / "../../../results" / self.pipeline_name
