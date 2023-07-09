@@ -20,7 +20,7 @@ class BasicGAN(keras.Model):
         super().__init__()
         self.discriminator = discriminator
         self.generator = generator
-        self.latent_dim = latent_dim  # number of columns of the dataset
+        self.latent_dim = latent_dim  # ! unrelated to ncol(X) and ncol(Y)
         self.gen_loss_tracker = keras.metrics.Mean(name="generator_loss")
         self.disc_loss_tracker = keras.metrics.Mean(name="discriminator_loss")
 
@@ -122,6 +122,7 @@ class BasicGANPipeline(GenericPipeline):
         pipeline_name: str,  # name of the pipeline, for saving models/datasets.
         subset=0.25,
         batch_size: int = 128,
+        latent_dim: int = 0,
     ) -> None:
         super().__init__()
         self.subset = subset
@@ -140,6 +141,9 @@ class BasicGANPipeline(GenericPipeline):
         self.y_encoder = None
         train_loader, num_cols = self.load_data(dataset_filename)
         self.y_cols_len = self.get_y_cols_len()
+        # ^ if latent_dim is not defined, set it to num_cols.
+        self.latent_dim = latent_dim if latent_dim != 0 else num_cols
+        print(f"set latent dim to: {self.latent_dim}")
 
         self.dataset = train_loader
         self.num_cols = num_cols
@@ -171,6 +175,7 @@ class BasicGANPipeline(GenericPipeline):
         y_indices = list(
             range(len(col_labels) - 1, len(col_labels) - y_col_num - 1, -1)
         )
+        print(f"when y_col_num = {y_col_num}, y_indices is {y_indices}")
         x_sigmoid_indices = [
             i
             for i in range(len(col_labels))
@@ -263,7 +268,9 @@ class BasicGANPipeline(GenericPipeline):
         )
         generator = keras.Sequential(
             [
-                keras.layers.Dense(64, activation="relu", input_shape=(self.num_cols,)),
+                keras.layers.Dense(
+                    64, activation="relu", input_shape=(self.latent_dim,)
+                ),
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(64, activation="relu"),
                 keras.layers.Dense(64, activation="relu"),
@@ -278,7 +285,7 @@ class BasicGANPipeline(GenericPipeline):
         return BasicGAN(
             discriminator=self.discriminator,
             generator=self.generator,
-            latent_dim=self.num_cols,
+            latent_dim=self.latent_dim,
         )
 
     def compile_and_fit_GAN(self, learning_rate=0.001, beta_1=0.9, epochs=2):
@@ -291,6 +298,7 @@ class BasicGANPipeline(GenericPipeline):
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
             # custom_metrics=[self.domain_knowledge_score],
+            # run_eagerly=True,
         )
         self.history = self.gan.fit(
             self.dataset,
@@ -317,7 +325,7 @@ class BasicGANPipeline(GenericPipeline):
 
     def generate_samples(self, num_samples: int, **kwargs):
         latent_space_samples = tf.random.normal(
-            (num_samples, self.num_cols)
+            (num_samples, self.latent_dim)
         )  # (num_samples samples of noise, number of cols)
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples

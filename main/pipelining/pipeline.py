@@ -13,6 +13,7 @@ from .pipeline_5classes import (
     load_testdata_5classes,
 )
 from ..synthetic_eval.evaluate_synthetic import eval_synthetic_one_epoch
+from sys import stdout
 
 
 def create_output_dir(pipeline_name: str, skip_if_exists=False) -> Path:
@@ -81,6 +82,7 @@ def run_pipeline(
     batch_size: int = 1024,
     learning_rate: float = 0.00001,
     fold: str = "",  # used to give different file names for crossval
+    latent_dim: int = 0,  # ^ since latent size is also a hyperparam
 ):
     # basic checks
     assert num_classes == 2 or num_classes == 5
@@ -91,7 +93,8 @@ def run_pipeline(
 
     output_dir = create_output_dir(pipeline_name, bool(fold))
     with open(output_dir / f"log{fold}.txt", "w") as f:
-        with redirect_stdout(f):
+        # with redirect_stdout(f):
+        with redirect_stdout(stdout):
             # Load data & init pipline
             print("Loading training data and initialising GAN...")
             gan_pipeline = gan_pipeline_class(
@@ -100,6 +103,7 @@ def run_pipeline(
                 pipeline_name,
                 subset=False,
                 batch_size=batch_size,
+                latent_dim=latent_dim,
             )
 
             # Save summary of parameters
