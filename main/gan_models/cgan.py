@@ -170,5 +170,5 @@ class CGAN_pipeline(BasicGANPipeline):
 
         # * since the generated samples only generates X, we need to concatenate the labels too.
         generated_samples_X = self.generator(latent_and_labels).numpy()  # G(noise)
-        generated_samples = tf.concat((generated_samples_X, one_hot_labels), axis=1)
+        generated_samples = np.hstack((generated_samples_X, one_hot_labels))
         return generated_samples
