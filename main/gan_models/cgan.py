@@ -154,13 +154,16 @@ class CGAN_pipeline(BasicGANPipeline):
         )  # (num_samples samples of noise, number of cols)
 
         # * generate random labels.
-        num_classes = self.y_cols_len
+        num_classes = len(self.y_encoder.classes_)  # 2 for 2 classes
         rand_labels = np.random.randint(
             low=0, high=num_classes, size=(num_samples)
         ).reshape(-1, 1)
         # * one-hot encode random labels
         enc = OneHotEncoder(
-            categories=[list(range(num_classes))], dtype="float32", sparse=False
+            categories=[list(range(num_classes))],
+            dtype="float32",
+            sparse=False,
+            drop="if_binary",  # ~ this is needed to not generate 2 cols for 2 classes
         ).fit(rand_labels)
         one_hot_labels = tf.convert_to_tensor(enc.transform(rand_labels))
         latent_and_labels = tf.concat((latent_space_samples, one_hot_labels), axis=1)
