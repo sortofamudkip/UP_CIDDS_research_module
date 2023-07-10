@@ -93,8 +93,8 @@ def run_pipeline(
 
     output_dir = create_output_dir(pipeline_name, bool(fold))
     with open(output_dir / f"log{fold}.txt", "w") as f:
-        # with redirect_stdout(f):
-        with redirect_stdout(stdout):
+        with redirect_stdout(f):
+            # with redirect_stdout(stdout): # ^ for debugging
             # Load data & init pipline
             print("Loading training data and initialising GAN...")
             gan_pipeline = gan_pipeline_class(
