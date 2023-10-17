@@ -106,6 +106,12 @@ class CGAN_pipeline(BasicGANPipeline):
             num_y_cols=self.y_cols_len,
         )
 
+    ## * Tuning tips:
+    ## *   Set hyperparameters based on literature
+    ## *   make it wider first, then try making it deeper
+    ## * instead of TSTR-F1, do TSTR-ROC-AUC metric for binary classification task, and ROC-AUC (one-vs-all) for 5 classes
+    ## * focus 2 classes
+
     def get_generator(self):
         final_layer = self.create_generator_final_layer(self.X_colnames, y_col_num=0)
         # * For CGANs, the y labels are also added to the generator.
