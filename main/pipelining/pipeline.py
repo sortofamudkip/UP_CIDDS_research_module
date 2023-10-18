@@ -16,7 +16,20 @@ from ..synthetic_eval.evaluate_synthetic import eval_synthetic_one_epoch
 from sys import stdout
 
 
+from pathlib import Path
+
+
 def create_output_dir(pipeline_name: str, skip_if_exists=False) -> Path:
+    """
+    Creates a new directory for the pipeline's output files.
+
+    Args:
+        pipeline_name (str): The name of the pipeline.
+        skip_if_exists (bool): If True, returns the existing directory instead of creating a new one.
+
+    Returns:
+        Path: The path to the newly created directory.
+    """
     output_dir = (Path(__file__).parent / "../../../results" / pipeline_name).resolve()
     if skip_if_exists and output_dir.is_dir():
         return output_dir
@@ -30,6 +43,16 @@ def create_output_dir(pipeline_name: str, skip_if_exists=False) -> Path:
 
 
 def load_testdata(test_data_pickle_fname: str, num_classes: int):
+    """
+    Load test data from a pickle file and return the input and target data.
+
+    Args:
+        test_data_pickle_fname (str): The filename of the pickle file containing the test data.
+        num_classes (int): The number of classes in the dataset. Must be either 2 or 5.
+
+    Returns:
+        tuple: A tuple containing the input and target data as numpy arrays.
+    """
     assert num_classes in (2, 5)
     X_test, y_test = (
         load_testdata_2classes(test_data_pickle_fname)
@@ -47,6 +70,21 @@ def eval_dataset(
     y_test: np.array,
     num_classes: int,
 ) -> pd.DataFrame:
+    """
+    Evaluate a GAN pipeline on a given test dataset.
+
+    Args:
+        pipeline_name (str): Name of the GAN pipeline being evaluated.
+        num_epochs (int): Number of epochs the GAN pipeline was trained for.
+        gan_pipeline: The GAN pipeline being evaluated.
+        X_test (np.array): Test dataset features.
+        y_test (np.array): Test dataset labels.
+        num_classes (int): Number of classes in the dataset. Must be 2 or 5.
+
+    Returns:
+        pd.DataFrame: A summary of the evaluation results.
+    """
+
     assert num_classes in (2, 5), "Number of classes can only be 2 or 5"
     summary_df = (
         eval_2classes(pipeline_name, num_epochs, gan_pipeline, X_test, y_test)
@@ -71,6 +109,16 @@ def generate_and_eval_dataset_once(
     return summary_df
 
 
+import json
+import pandas as pd
+from contextlib import redirect_stdout
+from pathlib import Path
+from typing import Dict, Any, Tuple
+
+from .preprocessor import load_testdata, decode_N_WGAN_GP
+from .basic_gan import BasicGANPipeline
+
+
 def run_pipeline(
     pipeline_name: str,  # ex: "N_2_25epochs_TSTR001"
     train_data_pickle_fname: str,  # ex: "./preprocessed/X_y_2_classes_N_train"
@@ -83,7 +131,27 @@ def run_pipeline(
     learning_rate: float = 0.00001,
     fold: str = "",  # used to give different file names for crossval
     latent_dim: int = 0,  # ^ since latent size is also a hyperparam
-):
+) -> Dict[str, Any]:
+    """
+    Runs a GAN pipeline with the given parameters.
+
+    Args:
+        pipeline_name (str): Name of the pipeline.
+        train_data_pickle_fname (str): Filepath of the preprocessed training data.
+        test_data_pickle_fname (str): Filepath of the preprocessed test data.
+        num_epochs (int): Number of epochs to train the GAN for.
+        gan_pipeline_class (class): Class of the GAN pipeline to use.
+        preprocessor_function (function): Function to use for preprocessing the data.
+        num_classes (int): Number of classes in the data.
+        batch_size (int, optional): Batch size to use for training. Defaults to 1024.
+        learning_rate (float, optional): Learning rate to use for training. Defaults to 0.00001.
+        fold (str, optional): Used to give different file names for cross-validation. Defaults to "".
+        latent_dim (int, optional): Size of the latent dimension. Defaults to 0.
+
+    Returns:
+        dict: A dictionary containing the summary dataframe, the trained GAN, and the losses.
+    """
+
     # basic checks
     assert num_classes == 2 or num_classes == 5
 
