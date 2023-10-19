@@ -14,6 +14,9 @@ from .pipeline_5classes import (
 )
 from ..synthetic_eval.evaluate_synthetic import eval_synthetic_one_epoch
 from sys import stdout
+from typing import Dict, Any, Tuple
+
+# from .basic_gan import BasicGANPipeline
 
 
 from pathlib import Path
@@ -100,6 +103,18 @@ def generate_and_eval_dataset_once(
     y_test: np.array,
     num_classes: int,
 ) -> pd.DataFrame:
+    """
+    Generates synthetic samples using the provided GAN pipeline and evaluates them against the provided test set.
+
+    Args:
+        gan_pipeline (GANPipeline): The GAN pipeline to use for generating synthetic samples.
+        X_test (np.array): The feature matrix of the test set.
+        y_test (np.array): The target vector of the test set.
+        num_classes (int): The number of classes in the target vector. Must be either 2 or 5.
+
+    Returns:
+        pd.DataFrame: A summary of the evaluation results.
+    """
     assert num_classes in (2, 5), "Number of classes can only be 2 or 5"
     num_rows_to_generate = gan_pipeline.X.shape[0]
     generated_samples = gan_pipeline.generate_samples(num_rows_to_generate)
@@ -107,16 +122,6 @@ def generate_and_eval_dataset_once(
         gan_pipeline, generated_samples, X_test, y_test, num_classes
     )
     return summary_df
-
-
-import json
-import pandas as pd
-from contextlib import redirect_stdout
-from pathlib import Path
-from typing import Dict, Any, Tuple
-
-from .preprocessor import load_testdata, decode_N_WGAN_GP
-from .basic_gan import BasicGANPipeline
 
 
 def run_pipeline(

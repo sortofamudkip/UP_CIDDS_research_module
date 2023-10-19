@@ -5,6 +5,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     precision_recall_fscore_support,
+    roc_auc_score,
 )
 from pandas import DataFrame
 
@@ -44,6 +45,20 @@ def binary_stats(y_true, y_pred, title, y_encoder, pos_label="attacker"):
         index=[title],
     )
     return stats
+
+
+def roc_auc_one_epoch(y_true, y_pred):
+    """
+    Computes the ROC AUC score for one epoch of a model's predictions.
+
+    Args:
+        y_true (array-like): True labels.
+        y_pred (array-like): Predicted labels.
+
+    Returns:
+        float: ROC AUC score.
+    """
+    return roc_auc_score(y_true, y_pred)
 
 
 def multiclass_stats(y_true, y_pred, title):

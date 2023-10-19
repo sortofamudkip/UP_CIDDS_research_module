@@ -22,37 +22,69 @@ def eval_synthetic_one_epoch(
     if len(np.unique(y_train)) == 1:
         print("y only has one unique label!")
         tstr_forest_f1, tstr_logreg_f1 = 0, 0
+        tstr_forest_roc_auc, tstr_logreg_roc_auc = 0, 0
     else:
         # train models and obtain predictions
-        y_predict_forest, y_predict_logreg = tstr_predict_forest_logreg(
-            X_test, y_test, X_train, y_train, y_encoder
+        (
+            y_predict_and_proba_forest,
+            y_predict_and_proba_logreg,
+        ) = tstr_predict_forest_logreg(
+            X_test, y_test, X_train, y_train, y_encoder, also_return_proba=True
         )
+        y_predict_forest, y_proba_forest = y_predict_and_proba_forest
+        y_predict_logreg, y_proba_logreg = y_predict_and_proba_logreg
         # evaluate models
+        ## forest (i.e. nonlinear)
         tstr_forest_f1 = scoring.f1_stats_one_epoch(
             y_test, y_predict_forest, num_classes
         )
+        tstr_forest_roc_auc = (
+            scoring.roc_auc_one_epoch(y_test, y_proba_forest[:, 1])
+            if num_classes == 2
+            else -1
+        )
+        ## logreg (i.e. linear)
         tstr_logreg_f1 = scoring.f1_stats_one_epoch(
             y_test, y_predict_logreg, num_classes
         )
-        # gather results
+        tstr_logreg_roc_auc = (
+            scoring.roc_auc_one_epoch(y_test, y_proba_logreg[:, 1])
+            if num_classes == 2
+            else -1
+        )
+    ## ! NEW STUFF ADDED, TEST THIS LATER
+    # gather results
     summary_df = {
         "plaus_score": plausibility_score,
         "TSTR_forest_f1": tstr_forest_f1,
+        "TSTR_forest_roc_auc": tstr_forest_roc_auc,
         "TSTR_logreg_f1": tstr_logreg_f1,
+        "TSTR_logreg_roc_auc": tstr_logreg_roc_auc,
     }
     return summary_df
 
 
-def tstr_predict_forest_logreg(X_test, y_test, X_train, y_train, y_encoder):
+def tstr_predict_forest_logreg(
+    X_test, y_test, X_train, y_train, y_encoder, also_return_proba=False
+):
     y_predict_forest = models.random_forest_train_predict(
-        X_train, X_test, y_train, y_test, y_encoder, n_estimators=20, n_jobs=4
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        y_encoder,
+        also_return_proba=also_return_proba,
+        n_estimators=20,
+        n_jobs=4,
     )
+    # print(f"y_predict_forest: {y_predict_forest}")
     y_predict_logreg = models.logistic_reg_train_predict(
         X_train,
         X_test,
         y_train,
         y_test,
         y_encoder,
+        also_return_proba=also_return_proba,
         solver="newton-cg",
         n_jobs=4,
     )

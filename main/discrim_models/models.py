@@ -128,14 +128,20 @@ def tree_perceptron_predict(
 
 
 def random_forest_train_predict(
-    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+    X_train, X_test, y_train, y_test, y_encoder, also_return_proba=False, **kwargs
 ) -> np.array:
     clf = RandomForestClassifier(random_state=555, **kwargs).fit(X_train, y_train)
-    return clf.predict(X_test)
+    if also_return_proba:
+        return clf.predict(X_test), clf.predict_proba(X_test)
+    else:
+        return clf.predict(X_test)
 
 
 def logistic_reg_train_predict(
-    X_train, X_test, y_train, y_test, y_encoder, **kwargs
+    X_train, X_test, y_train, y_test, y_encoder, also_return_proba=False, **kwargs
 ) -> np.array:
     clf = LogisticRegression(random_state=555, **kwargs).fit(X_train, y_train)
-    return clf.predict(X_test)
+    if also_return_proba:
+        return clf.predict(X_test), clf.predict_proba(X_test)
+    else:
+        return clf.predict(X_test)
