@@ -52,7 +52,6 @@ def eval_synthetic_one_epoch(
             if num_classes == 2
             else -1
         )
-    ## ! NEW STUFF ADDED, TEST THIS LATER
     # gather results
     summary_df = {
         "plaus_score": plausibility_score,
