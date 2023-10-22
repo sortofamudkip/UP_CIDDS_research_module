@@ -16,7 +16,7 @@ def eval_synthetic_one_epoch(
     num_classes: int,
 ):
     print("Begin synthetic evaluation")
-    plausibility_score = eval_plaus_score(gan_pipeline, synthetic_samples)
+    # plausibility_score = eval_plaus_score(gan_pipeline, synthetic_samples)
     # evaluate on linear and non-linear models
     X_train, y_train, y_encoder = decode_samples_to_np(gan_pipeline, synthetic_samples)
     if len(np.unique(y_train)) == 1:
@@ -54,7 +54,7 @@ def eval_synthetic_one_epoch(
         )
     # gather results
     summary_df = {
-        "plaus_score": plausibility_score,
+        # "plaus_score": plausibility_score,
         "TSTR_forest_f1": tstr_forest_f1,
         "TSTR_forest_roc_auc": tstr_forest_roc_auc,
         "TSTR_logreg_f1": tstr_logreg_f1,
@@ -76,7 +76,6 @@ def tstr_predict_forest_logreg(
         n_estimators=20,
         n_jobs=4,
     )
-    # print(f"y_predict_forest: {y_predict_forest}")
     y_predict_logreg = models.logistic_reg_train_predict(
         X_train,
         X_test,
@@ -155,7 +154,7 @@ def eval_all_synthetic_2classes(
     return summary_df
 
 
-def decode_samples_to_np(gan_pipeline, synthetic_samples):
+def decode_samples_to_np(gan_pipeline: basic_gan.BasicGANPipeline, synthetic_samples):
     return gan_pipeline.decode_samples_to_model_format(synthetic_samples)
 
 
