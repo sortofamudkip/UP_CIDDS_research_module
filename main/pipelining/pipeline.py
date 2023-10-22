@@ -102,6 +102,7 @@ def generate_and_eval_dataset_once(
     X_test: np.array,
     y_test: np.array,
     num_classes: int,
+    synthetic_to_real_ratio: float = -1,
 ) -> pd.DataFrame:
     """
     Generates synthetic samples using the provided GAN pipeline and evaluates them against the provided test set.
@@ -111,15 +112,33 @@ def generate_and_eval_dataset_once(
         X_test (np.array): The feature matrix of the test set.
         y_test (np.array): The target vector of the test set.
         num_classes (int): The number of classes in the target vector. Must be either 2 or 5.
+        synthetic_to_real_ratio (int): The ratio of synthetic to real data to use for evaluation.
+                                       If -1, use all synthetic data. Defaults to -1.
 
     Returns:
         pd.DataFrame: A summary of the evaluation results.
     """
     assert num_classes in (2, 5), "Number of classes can only be 2 or 5"
-    num_rows_to_generate = gan_pipeline.X.shape[0]
-    generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
-        num_rows_to_generate
-    )
+
+    # if T(S+R)TR: add real data to synthetic data
+    if synthetic_to_real_ratio > 0:
+        num_rows_to_generate = int(gan_pipeline.X.shape[0] * synthetic_to_real_ratio)
+        generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
+            num_rows_to_generate
+        )
+        real_data = np.hstack((gan_pipeline.X, gan_pipeline.y))  # real X and y
+        generated_samples = np.vstack((generated_samples, real_data))
+        np.random.shuffle(generated_samples)  # shuffle
+
+    # else: TSTR, only use S
+    else:
+        # generate synthetic data
+        num_rows_to_generate = gan_pipeline.X.shape[0]
+        generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
+            num_rows_to_generate
+        )
+
+    # evaluate synthetic data
     summary_df = eval_synthetic_one_epoch(
         gan_pipeline, generated_samples, X_test, y_test, num_classes
     )
@@ -138,6 +157,7 @@ def run_pipeline(
     learning_rate: float = 0.00001,
     fold: str = "",  # used to give different file names for crossval
     latent_dim: int = 0,  # ^ since latent size is also a hyperparam
+    synthetic_to_real_ratio: float = -1,  # ^ for T(S+R)TR
 ) -> Dict[str, Any]:
     """
     Runs a GAN pipeline with the given parameters.
@@ -154,6 +174,7 @@ def run_pipeline(
         learning_rate (float, optional): Learning rate to use for training. Defaults to 0.00001.
         fold (str, optional): Used to give different file names for cross-validation. Defaults to "".
         latent_dim (int, optional): Size of the latent dimension. Defaults to 0.
+        synthetic_to_real_ratio (float, optional): Ratio of synthetic to real data to use for evaluation. Defaults to -1.
 
     Returns:
         dict: A dictionary containing the summary dataframe, the trained GAN, and the losses.
@@ -192,6 +213,7 @@ def run_pipeline(
                     "learning_rate": learning_rate,
                     "preprocessing_method": str(preprocessor_function),
                     "num_classes": num_classes,
+                    "synthetic_to_real_ratio": synthetic_to_real_ratio,
                 }
                 json.dump(params, f, indent=4)
             print(f"Parameters summary saved in results/{pipeline_name}/params.json")
@@ -222,7 +244,11 @@ def run_pipeline(
             # generate and evaluate synthetic data
             print("Evaluating synthetic data...")
             summary_df = generate_and_eval_dataset_once(
-                gan_pipeline, X_test, y_test, num_classes
+                gan_pipeline,
+                X_test,
+                y_test,
+                num_classes,
+                synthetic_to_real_ratio=synthetic_to_real_ratio,
             )
 
             # save summary data
