@@ -345,14 +345,16 @@ class BasicGANPipeline(GenericPipeline):
         retention_scores = []
 
         while cur_num_rows < n_target_rows:
+            # * generate samples and decode them to human format (pandas df)
             samples_np = self.generate_samples(len(self.X))
             samples_df = self.decode_samples_to_human_format(samples_np)
 
+            # * filter out implausible rows
             filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
             plausible_samples = samples_np[filtered_mask]
             all_plausible_samples.append(plausible_samples)
 
-            # update stats
+            # * update retention score
             retention_scores.append(len(plausible_samples) / len(self.X))
             cur_num_rows += len(plausible_samples)
 
