@@ -16,7 +16,7 @@ from ..synthetic_eval.evaluate_synthetic import eval_synthetic_one_epoch
 from sys import stdout
 from typing import Dict, Any, Tuple
 
-# from .basic_gan import BasicGANPipeline
+from ..gan_models.basic_gan import BasicGANPipeline
 
 
 from pathlib import Path
@@ -98,7 +98,7 @@ def eval_dataset(
 
 
 def generate_and_eval_dataset_once(
-    gan_pipeline,
+    gan_pipeline: BasicGANPipeline,
     X_test: np.array,
     y_test: np.array,
     num_classes: int,
@@ -117,7 +117,9 @@ def generate_and_eval_dataset_once(
     """
     assert num_classes in (2, 5), "Number of classes can only be 2 or 5"
     num_rows_to_generate = gan_pipeline.X.shape[0]
-    generated_samples = gan_pipeline.generate_samples(num_rows_to_generate)
+    generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
+        num_rows_to_generate
+    )
     summary_df = eval_synthetic_one_epoch(
         gan_pipeline, generated_samples, X_test, y_test, num_classes
     )
