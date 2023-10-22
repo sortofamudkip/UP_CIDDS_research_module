@@ -328,7 +328,18 @@ class BasicGANPipeline(GenericPipeline):
         generated_samples = self.generator(latent_space_samples).numpy()  # G(noise)
         return generated_samples
 
-    def generate_n_plausible_samples(self, n_target_rows):
+    def generate_n_plausible_samples(self, n_target_rows: int):
+        """
+        Generates n_target_rows number of plausible samples using the GAN model.
+
+        Args:
+            n_target_rows (int): The number of plausible samples to generate.
+
+        Returns:
+            tuple: A tuple containing:
+                - numpy.ndarray: A 2D numpy array of shape (n_target_rows, n_features) containing the generated plausible samples.
+                - numpy.ndarray: A 1D numpy array of shape (n_iterations,) containing the retention scores for each iteration.
+        """
         all_plausible_samples = []
         cur_num_rows = 0
         retention_scores = []
