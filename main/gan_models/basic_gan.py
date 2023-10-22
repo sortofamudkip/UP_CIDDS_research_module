@@ -321,7 +321,17 @@ class BasicGANPipeline(GenericPipeline):
         score = score_data_plausibility_single(decoded)
         return score
 
-    def generate_samples(self, num_samples: int, **kwargs):
+    def generate_samples(self, num_samples: int, **kwargs) -> np.array:
+        """
+        Generates a given number of samples using the generator of the GAN model.
+
+        Args:
+            num_samples (int): The number of samples to generate.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            np.array: Numpy array of generated samples.
+        """
         latent_space_samples = tf.random.normal(
             (num_samples, self.latent_dim)
         )  # (num_samples samples of noise, number of cols)
