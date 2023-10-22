@@ -28,6 +28,7 @@ def f1_stats_one_epoch(y_true, y_pred, num_classes: int, pos_label="attacker"):
         return f1_score(y_true, y_pred, pos_label=pos_label)
     elif num_classes == 5:
         return f1_score(y_true, y_pred, average="weighted")
+    assert False, "num_classes must be 2 or 5"
 
 
 def binary_stats(y_true, y_pred, title, y_encoder, pos_label="attacker"):
