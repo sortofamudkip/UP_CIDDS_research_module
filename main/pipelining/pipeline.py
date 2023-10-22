@@ -131,7 +131,7 @@ def run_pipeline(
     train_data_pickle_fname: str,  # ex: "./preprocessed/X_y_2_classes_N_train"
     test_data_pickle_fname: str,  # ex: "./preprocessed/X_y_2_classes_N_test"
     num_epochs: int,  # ex: 5
-    gan_pipeline_class,  # ex: basic_gan.BasicGANPipeline
+    gan_pipeline_class: BasicGANPipeline,  # ex: basic_gan.BasicGANPipeline
     preprocessor_function,  # ex: preprocessor.decode_N_WGAN_GP
     num_classes: int,  # ex: 2
     batch_size: int = 1024,
