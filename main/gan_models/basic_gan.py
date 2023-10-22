@@ -132,8 +132,8 @@ class BasicGANPipeline(GenericPipeline):
         self.pipeline_name = pipeline_name
 
         # these are to be filled out by self.load_data
-        self.X = None
-        self.y = None
+        self.X = None  # * original (real) X, NOT synthetic
+        self.y = None  # * original (real) y, NOT synthetic
         self.X_colnames = None
         self.y_colnames = None
         self.all_col_labels = None
