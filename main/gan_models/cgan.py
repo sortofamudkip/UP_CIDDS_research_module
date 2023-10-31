@@ -13,7 +13,6 @@ class CGAN(BasicGAN):
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
 
-    # TODO: override this function!!
     def train_step(self, real_samples):
         # & Unpack the real data.
         # X_labels = real_samples[:, : -self.num_y_cols]  # first N cols
