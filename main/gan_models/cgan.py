@@ -13,10 +13,7 @@ class CGAN(BasicGAN):
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
 
-    def train_step(self, real_samples):
-        # & Unpack the real data.
-        # X_labels = real_samples[:, : -self.num_y_cols]  # first N cols
-        y_labels = real_samples[:, -self.num_y_cols :]  # last N cols
+    def train_D(self, real_samples, y_labels: int):
         # & Generate fake data (train D)
         batch_size = tf.shape(real_samples)[0]
         # ^ Note: The self.latent_dim is also a hyperparam.
@@ -34,7 +31,6 @@ class CGAN(BasicGAN):
 
         # vstack rows of real and fake data to form the training set's X
         all_samples = tf.concat((real_samples, images_concat_labels), axis=0)
-        # all_samples = real_samples
         # stack rows of real and fake labels to form the training set's y.
         #   real is 1, fake is 0
         # *  note: for CGAN, we don't need to touch this, since CGAN just involves increasing number of cols (not rows).
@@ -50,7 +46,9 @@ class CGAN(BasicGAN):
         self.d_optimizer.apply_gradients(
             zip(grads, self.discriminator.trainable_weights)
         )
+        return d_loss
 
+    def train_G(self, batch_size: int, y_labels: int):
         # & Generate fake data (train G)
         random_latent_vectors_X = tf.random.normal(shape=(batch_size, self.latent_dim))
         # * for CGAN, random_vector_labels will also have the one-hot encoded y labels concatenated.
@@ -68,6 +66,16 @@ class CGAN(BasicGAN):
             g_loss = self.loss_fn(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
+        return g_loss
+
+    def train_step(self, real_samples):
+        # & Unpack the real data.
+        # X_labels = real_samples[:, : -self.num_y_cols]  # first N cols
+        y_labels = real_samples[:, -self.num_y_cols :]  # last N cols
+        batch_size = tf.shape(real_samples)[0]
+
+        d_loss = self.train_D(real_samples, y_labels)
+        g_loss = self.train_G(batch_size, y_labels)
 
         # & Update loss
         self.gen_loss_tracker.update_state(g_loss)
