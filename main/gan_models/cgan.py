@@ -61,7 +61,6 @@ class CGAN(BasicGAN):
         with tf.GradientTape() as tape:
             generated_samples_X = self.generator(random_vector_labels)
             images_concat_labels = tf.concat((generated_samples_X, y_labels), axis=1)
-            # TODO: for CGAN, the discriminator also takes the one-hot encoded Y as well.
             predictions = self.discriminator(images_concat_labels)
             g_loss = self.loss_fn(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
