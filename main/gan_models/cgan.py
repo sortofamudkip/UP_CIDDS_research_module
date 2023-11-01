@@ -13,7 +13,7 @@ class CGAN(BasicGAN):
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
 
-    def train_D(self, real_samples, y_labels: int):
+    def train_D(self, real_samples, y_labels: np.array):
         # & Generate fake data (train D)
         batch_size = tf.shape(real_samples)[0]
         # ^ Note: The self.latent_dim is also a hyperparam.
@@ -48,7 +48,7 @@ class CGAN(BasicGAN):
         )
         return d_loss
 
-    def train_G(self, batch_size: int, y_labels: int):
+    def train_G(self, batch_size: int, y_labels: np.array):
         # & Generate fake data (train G)
         random_latent_vectors_X = tf.random.normal(shape=(batch_size, self.latent_dim))
         # * for CGAN, random_vector_labels will also have the one-hot encoded y labels concatenated.
