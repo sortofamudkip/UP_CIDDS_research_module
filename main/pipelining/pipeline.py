@@ -154,7 +154,8 @@ def run_pipeline(
     preprocessor_function,  # ex: preprocessor.decode_N_WGAN_GP
     num_classes: int,  # ex: 2
     batch_size: int = 1024,
-    learning_rate: float = 0.00001,
+    d_learning_rate: float = 0.0003,
+    g_learning_rate: float = 0.0001,
     fold: str = "",  # used to give different file names for crossval
     latent_dim: int = 0,  # ^ since latent size is also a hyperparam
     synthetic_to_real_ratio: float = -1,  # ^ for T(S+R)TR
@@ -210,7 +211,8 @@ def run_pipeline(
                     "test_data_pickle_fname": test_data_pickle_fname,
                     "num_epochs": num_epochs,
                     "batch_size": batch_size,
-                    "learning_rate": learning_rate,
+                    "d_learning_rate": d_learning_rate,
+                    "g_learning_rate": g_learning_rate,
                     "preprocessing_method": str(preprocessor_function),
                     "num_classes": num_classes,
                     "synthetic_to_real_ratio": synthetic_to_real_ratio,
@@ -221,7 +223,10 @@ def run_pipeline(
             # train GAN
             print("Training GAN...")
             gan_history = gan_pipeline.compile_and_fit_GAN(
-                learning_rate=learning_rate, beta_1=0.90, epochs=num_epochs
+                d_learning_rate=d_learning_rate,
+                g_learning_rate=g_learning_rate,
+                beta_1=0.90,
+                epochs=num_epochs,
             )
 
             # plot and save losses

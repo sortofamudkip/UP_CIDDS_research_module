@@ -286,13 +286,15 @@ class BasicGANPipeline(GenericPipeline):
             latent_dim=self.latent_dim,
         )
 
-    def compile_and_fit_GAN(self, learning_rate=0.001, beta_1=0.9, epochs=2):
+    def compile_and_fit_GAN(
+        self, d_learning_rate=0.0003, g_learning_rate=0.0001, beta_1=0.9, epochs=2
+    ):
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
-                learning_rate=learning_rate, beta_1=beta_1
+                learning_rate=d_learning_rate, beta_1=beta_1
             ),
             g_optimizer=keras.optimizers.Adam(
-                learning_rate=learning_rate, beta_1=beta_1
+                learning_rate=g_learning_rate, beta_1=beta_1
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
             # custom_metrics=[self.domain_knowledge_score],
