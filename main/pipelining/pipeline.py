@@ -123,6 +123,7 @@ def generate_and_eval_dataset_once(
 
     # if T(S+R)TR: add real data to synthetic data
     if synthetic_to_real_ratio > 0:
+        logging.info(f"Using T(S+R)TR with ratio |S| ={synthetic_to_real_ratio}|R|")
         num_rows_to_generate = int(gan_pipeline.X.shape[0] * synthetic_to_real_ratio)
         generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
             num_rows_to_generate
@@ -135,6 +136,9 @@ def generate_and_eval_dataset_once(
     else:
         # generate synthetic data
         num_rows_to_generate = gan_pipeline.X.shape[0]
+        logging.info(
+            f"Using TSTR, |S| = {num_rows_to_generate}/{gan_pipeline.X.shape[0]}|R|"
+        )
         generated_samples, _ = gan_pipeline.generate_n_plausible_samples(
             num_rows_to_generate
         )
@@ -235,10 +239,6 @@ def run_pipeline(
         beta_1=0.90,
         epochs=num_epochs,
     )
-
-    ### !! ADD FLUSH=TRUE AND PRINT MORE ABOUT GENERATING SYNTHETIC DATA
-    ### !! ALSO MAYBE CHANGE THE LEARNING RATE
-
     # plot and save losses
     logging.info("Plotting and saving losses...")
     losses = pd.DataFrame(
