@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import UP_CIDDS_research_module.main.gan_models.basic_gan as basic_gan
 import UP_CIDDS_research_module.main.discrim_models.models as models
 import UP_CIDDS_research_module.main.score_model as scoring
+import logging
 
 
 def eval_synthetic_one_epoch(
@@ -15,12 +16,12 @@ def eval_synthetic_one_epoch(
     y_test: np.array,
     num_classes: int,
 ):
-    print("Begin synthetic evaluation")
+    logging.info("Begin synthetic evaluation")
     # plausibility_score = eval_plaus_score(gan_pipeline, synthetic_samples)
     # evaluate on linear and non-linear models
     X_train, y_train, y_encoder = decode_samples_to_np(gan_pipeline, synthetic_samples)
     if len(np.unique(y_train)) == 1:
-        print("y only has one unique label!")
+        logging.warning("y only has one unique label!")
         tstr_forest_f1, tstr_logreg_f1 = 0, 0
         tstr_forest_roc_auc, tstr_logreg_roc_auc = 0, 0
     else:
@@ -101,7 +102,7 @@ def eval_all_synthetic_2classes(
     tstr_forest_f1s = []
     tstr_logreg_f1s = []
     for epoch in range(1, num_epochs + 1):
-        print(f"Epoch {epoch} evaluation:\n=========")
+        logging.info(f"Epoch {epoch} evaluation:\n=========")
         # load created data
         synthetic_fname = f"results/{pipeline_name}/synthetic_epoch{epoch}.npy"
         synthetic_samples = load_synthetic_data(synthetic_fname)
@@ -113,7 +114,7 @@ def eval_all_synthetic_2classes(
             gan_pipeline, synthetic_samples
         )
         if len(np.unique(y_train)) == 1:
-            print("y only has one unique label!")
+            logging.warning("y only has one unique label!")
             tstr_N_2classes_forest_report = scoring.mode_collapse_binary_stats(
                 "TSTR_2classes_forest"
             )
@@ -184,7 +185,7 @@ def eval_all_synthetic_5classes(
     tstr_tree_f1s = []
     tstr_perceptron_f1s = []
     for epoch in range(1, num_epochs + 1):
-        print(f"Epoch {epoch} evaluation:\n=========")
+        logging.info(f"Epoch {epoch} evaluation:\n=========")
         # load created data
         synthetic_samples = np.load(
             f"results/{pipeline_name}/synthetic_epoch{epoch}.npy"
@@ -195,13 +196,13 @@ def eval_all_synthetic_5classes(
             decoded_samples, num_classes=5
         )
         plaus_scores.append(plausibility_score)
-        # print(f"overall plausibility_score: {plausibility_score}")
+        # logging.info(f"overall plausibility_score: {plausibility_score}")
         # evaluate on linear and non-linear models
         X_train, y_train, y_encoder = gan_pipeline.decode_samples_to_model_format(
             synthetic_samples
         )
         if len(np.unique(y_train)) == 1:
-            print("y only has one unique label!")
+            logging.info("y only has one unique label!")
             y_predict_forest = False
             y_predict_logreg = False
             tstr_N_5classes_forestF1 = 0

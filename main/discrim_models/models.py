@@ -6,6 +6,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import Perceptron, LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+import logging
 
 
 def y_train_test_split_summary(y, y_train, y_test, y_encoder):
@@ -123,7 +124,7 @@ def tree_perceptron_predict(
         clf = Perceptron(random_state=555, **kwargs).fit(X_train, y_train)
         return clf.predict(X_test)
     except ValueError:
-        print("Perceptron ran into an error. again.")
+        logging.error("Perceptron ran into an error. again.")
         return None
 
 

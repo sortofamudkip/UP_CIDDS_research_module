@@ -9,10 +9,12 @@ from ..score_dataset import (
     score_data_plausibility_single,
     mask_plausible_rows,
 )
+import logging
 from ..preprocessing_utils.general.postprocessing import postprocess_UDP_TCP_flags
 
 # from ..preprocess_data import decode_N_WGAN_GP
 from pathlib import Path
+import logging
 
 
 class BasicGAN(keras.Model):
@@ -154,9 +156,9 @@ class BasicGANPipeline(GenericPipeline):
         output_dir = Path(__file__).parent / "../../../results" / self.pipeline_name
         try:
             output_dir.mkdir(parents=True, exist_ok=False)
-            print(f"Created output dir {output_dir}.")
+            logging.info(f"Created output dir {output_dir}.")
         except FileExistsError:
-            print(f"Dir already exists: {output_dir} ")
+            logging.error(f"Dir already exists: {output_dir} ")
             assert False
 
     def determine_generator_activations(
@@ -313,7 +315,7 @@ class BasicGANPipeline(GenericPipeline):
             #         pipeline_name=self.pipeline_name,
             #     ),
             # ],
-            verbose=2,
+            verbose=1,
         )
         return self.history
 
@@ -356,6 +358,7 @@ class BasicGANPipeline(GenericPipeline):
         cur_num_rows = 0
         retention_scores = []
 
+        logging.info(f"Generating {n_target_rows} plausible samples...")
         while cur_num_rows < n_target_rows:
             # * generate samples and decode them to human format (pandas df)
             samples_np = self.generate_samples(len(self.X))
@@ -364,11 +367,19 @@ class BasicGANPipeline(GenericPipeline):
             # * filter out implausible rows
             filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
             plausible_samples = samples_np[filtered_mask]
+
+            # * add to list of plausible samples
             all_plausible_samples.append(plausible_samples)
 
             # * update retention score
-            retention_scores.append(len(plausible_samples) / len(self.X))
+            retention_score = len(plausible_samples) / len(self.X)
+            retention_scores.append(retention_score)
             cur_num_rows += len(plausible_samples)
+
+            # * logging
+            logging.info(
+                f"Generated {len(plausible_samples)} plausible samples (retention score: {retention_score:.2f})"
+            )
 
         retention_scores = np.array(retention_scores)
 

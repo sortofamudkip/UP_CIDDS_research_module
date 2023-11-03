@@ -2,6 +2,7 @@ from contextlib import redirect_stdout
 import json
 from pathlib import Path
 import numpy as np
+import logging
 
 import pandas as pd
 from .pipeline_2classes import (
@@ -38,9 +39,9 @@ def create_output_dir(pipeline_name: str, skip_if_exists=False) -> Path:
         return output_dir
     try:
         output_dir.mkdir(parents=True, exist_ok=False)
-        print(f"Created output dir: {output_dir}")
+        logging.info(f"Created output dir: {output_dir}")
     except FileExistsError:
-        print(f"Dir already exists: {output_dir} ")
+        logging.error(f"Dir already exists: {output_dir} ")
         assert False
     return output_dir
 
@@ -189,74 +190,83 @@ def run_pipeline(
         fold = f"fold_{fold}"
 
     output_dir = create_output_dir(pipeline_name, bool(fold))
-    with open(output_dir / f"log{fold}.txt", "w") as f:
-        with redirect_stdout(f):
-            # with redirect_stdout(stdout): # ^ for debugging
-            # Load data & init pipline
-            print("Loading training data and initialising GAN...")
-            gan_pipeline = gan_pipeline_class(
-                train_data_pickle_fname,
-                preprocessor_function,
-                pipeline_name,
-                subset=False,
-                batch_size=batch_size,
-                latent_dim=latent_dim,
-            )
+    output_file_name = str((output_dir / f"log{fold}.log").resolve())
+    logging.basicConfig(
+        filename=output_file_name,
+        encoding="utf-8",
+        level=logging.INFO,
+        force=True,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
-            # Save summary of parameters
-            with open(f"results/{pipeline_name}/params.json", "w") as f:
-                params = {
-                    "pipeline_name": pipeline_name,
-                    "train_data_pickle_fname": train_data_pickle_fname,
-                    "test_data_pickle_fname": test_data_pickle_fname,
-                    "num_epochs": num_epochs,
-                    "batch_size": batch_size,
-                    "d_learning_rate": d_learning_rate,
-                    "g_learning_rate": g_learning_rate,
-                    "preprocessing_method": str(preprocessor_function),
-                    "num_classes": num_classes,
-                    "synthetic_to_real_ratio": synthetic_to_real_ratio,
-                }
-                json.dump(params, f, indent=4)
-            print(f"Parameters summary saved in results/{pipeline_name}/params.json")
+    # Load data & init pipline
+    logging.info("Loading training data and initialising GAN...")
+    gan_pipeline = gan_pipeline_class(
+        train_data_pickle_fname,
+        preprocessor_function,
+        pipeline_name,
+        subset=False,
+        batch_size=batch_size,
+        latent_dim=latent_dim,
+    )
 
-            # train GAN
-            print("Training GAN...")
-            gan_history = gan_pipeline.compile_and_fit_GAN(
-                d_learning_rate=d_learning_rate,
-                g_learning_rate=g_learning_rate,
-                beta_1=0.90,
-                epochs=num_epochs,
-            )
+    # Save summary of parameters
+    with open(f"results/{pipeline_name}/params.json", "w") as f:
+        params = {
+            "pipeline_name": pipeline_name,
+            "train_data_pickle_fname": train_data_pickle_fname,
+            "test_data_pickle_fname": test_data_pickle_fname,
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+            "d_learning_rate": d_learning_rate,
+            "g_learning_rate": g_learning_rate,
+            "preprocessing_method": str(preprocessor_function),
+            "num_classes": num_classes,
+            "synthetic_to_real_ratio": synthetic_to_real_ratio,
+        }
+        json.dump(params, f, indent=4)
+    logging.info(f"Parameters summary saved in results/{pipeline_name}/params.json")
 
-            # plot and save losses
-            print("Plotting and saving losses...")
-            losses = pd.DataFrame(
-                {
-                    "g_loss": gan_history.history["g_loss"],
-                    "d_loss": gan_history.history["d_loss"],
-                }
-            ).rename_axis("Epoch")
-            losses.to_csv(f"results/{pipeline_name}/losses{fold}.csv")
-            losses.plot(title="GAN Losses", ylabel="loss").get_figure().savefig(
-                f"results/{pipeline_name}/losses{fold}.jpg"
-            )
+    # train GAN
+    logging.info("Training GAN...")
+    gan_history = gan_pipeline.compile_and_fit_GAN(
+        d_learning_rate=d_learning_rate,
+        g_learning_rate=g_learning_rate,
+        beta_1=0.90,
+        epochs=num_epochs,
+    )
 
-            # load test data
-            print("Loading test data...")
-            X_test, y_test = load_testdata(test_data_pickle_fname, num_classes)
+    ### !! ADD FLUSH=TRUE AND PRINT MORE ABOUT GENERATING SYNTHETIC DATA
+    ### !! ALSO MAYBE CHANGE THE LEARNING RATE
 
-            # generate and evaluate synthetic data
-            print("Evaluating synthetic data...")
-            summary_df = generate_and_eval_dataset_once(
-                gan_pipeline,
-                X_test,
-                y_test,
-                num_classes,
-                synthetic_to_real_ratio=synthetic_to_real_ratio,
-            )
+    # plot and save losses
+    logging.info("Plotting and saving losses...")
+    losses = pd.DataFrame(
+        {
+            "g_loss": gan_history.history["g_loss"],
+            "d_loss": gan_history.history["d_loss"],
+        }
+    ).rename_axis("Epoch")
+    losses.to_csv(f"results/{pipeline_name}/losses{fold}.csv")
+    losses.plot(title="GAN Losses", ylabel="loss").get_figure().savefig(
+        f"results/{pipeline_name}/losses{fold}.jpg"
+    )
 
-            # save summary data
-            with open(f"results/{pipeline_name}/metrics{fold}.json", "w") as f:
-                json.dump(summary_df, f, indent=4)
+    # load test data
+    logging.info("Loading test data...")
+    X_test, y_test = load_testdata(test_data_pickle_fname, num_classes)
+
+    # generate and evaluate synthetic data
+    logging.info("Evaluating synthetic data...")
+    summary_df = generate_and_eval_dataset_once(
+        gan_pipeline,
+        X_test,
+        y_test,
+        num_classes,
+        synthetic_to_real_ratio=synthetic_to_real_ratio,
+    )
+
+    # save summary data
+    with open(f"results/{pipeline_name}/metrics{fold}.json", "w") as f:
+        json.dump(summary_df, f, indent=4)
     return {"summary_df": summary_df, "gan": gan_pipeline, "losses": losses}
