@@ -7,6 +7,22 @@ from ..preprocessing_utils.general.postprocessing import postprocess_UDP_TCP_fla
 from sys import stdout, stderr
 from sklearn.preprocessing import OneHotEncoder
 from keras import backend
+from keras.constraints import Constraint
+
+
+# clip model weights to a given hypercube
+class ClipConstraint(Constraint):
+    # set clip value when initialized
+    def __init__(self, clip_value):
+        self.clip_value = clip_value
+
+    # clip model weights to hypercube
+    def __call__(self, weights):
+        return backend.clip(weights, -self.clip_value, self.clip_value)
+
+    # get the config
+    def get_config(self):
+        return {"clip_value": self.clip_value}
 
 
 class WCGAN(CGAN):
@@ -14,6 +30,7 @@ class WCGAN(CGAN):
         super().__init__(discriminator, generator, latent_dim)
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
+        self.clip_constraint = ClipConstraint(0.01)
 
     def train_D(self, real_samples, y_labels: np.array):
         # & Generate fake data (train D)
@@ -75,13 +92,16 @@ class WCGAN(CGAN):
         batch_size = tf.shape(real_samples)[0]
 
         # * in WCGAN, update D more times than G
-        for i in range(5):
+        UPDATE_D_TIMES = 5
+        d_losses = np.zeros(UPDATE_D_TIMES)
+        for i in range(UPDATE_D_TIMES):
             d_loss = self.train_D(real_samples, y_labels)
+            d_losses[i] = d_loss
         g_loss = self.train_G(batch_size, y_labels)
 
         # & Update loss
         self.gen_loss_tracker.update_state(g_loss)
-        self.disc_loss_tracker.update_state(d_loss)
+        self.disc_loss_tracker.update_state(d_loss.mean())
         return {
             "g_loss": self.gen_loss_tracker.result(),
             "d_loss": self.disc_loss_tracker.result(),
@@ -145,11 +165,24 @@ class WCGAN_pipeline(BasicGANPipeline):
         input_shape = self.X.shape[1] + self.y.shape[1]
         discriminator = keras.Sequential(
             [
-                keras.layers.Dense(80, activation="relu", input_shape=(input_shape,)),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
+                keras.layers.Dense(
+                    80,
+                    activation="relu",
+                    input_shape=(input_shape,),
+                    kernel_constraint=self.clip_constraint,
+                ),
+                keras.layers.Dense(
+                    80, activation="relu", kernel_constraint=self.clip_constraint
+                ),
+                keras.layers.Dense(
+                    80, activation="relu", kernel_constraint=self.clip_constraint
+                ),
+                keras.layers.Dense(
+                    80, activation="relu", kernel_constraint=self.clip_constraint
+                ),
+                keras.layers.Dense(
+                    80, activation="relu", kernel_constraint=self.clip_constraint
+                ),
                 keras.layers.Dense(
                     1, activation="linear"
                 ),  # for WGAN, it's linear, not sigmoid
@@ -191,6 +224,7 @@ class WCGAN_pipeline(BasicGANPipeline):
         return generated_samples
 
     # implementation of wasserstein loss in Keras
+    @staticmethod
     def wasserstein_loss(y_true, y_pred):
         return backend.mean(y_true * y_pred)
 
@@ -209,6 +243,6 @@ class WCGAN_pipeline(BasicGANPipeline):
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            verbose=2,
+            verbose=1,
         )
         return self.history
