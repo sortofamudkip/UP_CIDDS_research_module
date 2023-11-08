@@ -12,22 +12,27 @@ load_dotenv(os.path.join(BASEDIR, ".env"))
 EXTERNAL_DATASET_DIR_NAME = os.path.abspath(
     os.path.join(BASEDIR, "..", os.getenv("EXTERNAL_DATASET_DIR_NAME"))
 )
+INTERNAL_DATASET_DIR_NAME = os.path.abspath(
+    os.path.join(BASEDIR, "..", os.getenv("INTERNAL_DATASET_DIR_NAME"))
+)
 
 
-def testt():
-    return EXTERNAL_DATASET_DIR_NAME
-
-
-def load_data_raw() -> pd.DataFrame:
+def load_data_raw(dataset: str = "external") -> pd.DataFrame:
     """Loads data with no preprocessing.
 
     Returns:
         pd.DataFrame: the dataset.
     """
+    assert dataset in ("external", "internal")
+    dataset_path = (
+        EXTERNAL_DATASET_DIR_NAME
+        if dataset == "external"
+        else INTERNAL_DATASET_DIR_NAME
+    )
     dataset = pd.concat(
         [
             pd.read_csv(
-                f"{EXTERNAL_DATASET_DIR_NAME}/CIDDS-001-external-week{i}.csv",
+                f"{dataset_path}/CIDDS-001-{dataset}-week{i}.csv",
                 dtype={
                     "Date first seen": str,
                     "Duration": float,
@@ -61,7 +66,11 @@ def load_data_raw() -> pd.DataFrame:
     return dataset
 
 
-def drop_unnecessary_columns(df: pd.DataFrame, drop_date_IP: bool) -> pd.DataFrame:
+def drop_unnecessary_columns(
+    df: pd.DataFrame,
+    drop_date_IP: bool,
+    is_external: bool = True,
+) -> pd.DataFrame:
     """Drops unnecessary columns from dataset.
 
     Args:
@@ -71,9 +80,12 @@ def drop_unnecessary_columns(df: pd.DataFrame, drop_date_IP: bool) -> pd.DataFra
     Returns:
         pd.DataFrame: new dataset.
     """
-    data = df.drop(
-        ["Flows", "Tos", "attackType", "attackID", "attackDescription"], axis=1
+    columns_to_drop = (
+        ["Flows", "Tos", "attackType", "attackID", "attackDescription"]
+        if is_external
+        else ["Flows", "Tos", "attackID", "attackDescription"]
     )
+    data = df.drop(columns_to_drop, axis=1)
     # dropped due to anonymisation and not being useful
     return (
         data.drop(["SrcIP", "DstIP", "Date_first_seen"], axis=1)
@@ -99,7 +111,7 @@ def _bytes_string_to_int(bytes_str: str) -> int:
     return int(float(value) * 10**6)
 
 
-def clean_data(dataset):
+def clean_data(dataset: pd.DataFrame):
     # strip whitespace from protocol number and Bytes
     dataset.Proto = dataset.Proto.apply(lambda x: x.strip())
     dataset["Bytes"] = dataset["Bytes"].apply(lambda x: x.strip())
@@ -118,8 +130,11 @@ def clean_data(dataset):
     return dataset
 
 
-def load_data(drop_date_IP, drop_misc_protocols):
-    data = drop_unnecessary_columns(clean_data(load_data_raw()), drop_date_IP)
+def load_data(drop_date_IP, drop_misc_protocols, dataset: str = "external"):
+    raw_data = load_data_raw(dataset)
+    data = drop_unnecessary_columns(
+        clean_data(raw_data), drop_date_IP, dataset == "external"
+    )
     return (
         data[data["Proto"].isin(["ICMP", "TCP", "UDP"])]
         if drop_misc_protocols
