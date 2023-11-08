@@ -30,7 +30,13 @@ def eval_synthetic_one_epoch(
             y_predict_and_proba_forest,
             y_predict_and_proba_logreg,
         ) = tstr_predict_forest_logreg(
-            X_test, y_test, X_train, y_train, y_encoder, also_return_proba=True
+            X_test,
+            y_test,
+            X_train,
+            y_train,
+            y_encoder,
+            num_classes=num_classes,
+            also_return_proba=True,
         )
         y_predict_forest, y_proba_forest = y_predict_and_proba_forest
         y_predict_logreg, y_proba_logreg = y_predict_and_proba_logreg
@@ -65,8 +71,15 @@ def eval_synthetic_one_epoch(
 
 
 def tstr_predict_forest_logreg(
-    X_test, y_test, X_train, y_train, y_encoder, also_return_proba=False
+    X_test,
+    y_test,
+    X_train,
+    y_train,
+    y_encoder,
+    num_classes: int,
+    also_return_proba=False,
 ):
+    logreg_solver = "newton-cg" if num_classes == 2 else "lbfgs"
     y_predict_forest = models.random_forest_train_predict(
         X_train,
         X_test,
@@ -74,7 +87,7 @@ def tstr_predict_forest_logreg(
         y_test,
         y_encoder,
         also_return_proba=also_return_proba,
-        n_estimators=20,
+        n_estimators=51,
         n_jobs=4,
     )
     y_predict_logreg = models.logistic_reg_train_predict(
@@ -84,7 +97,7 @@ def tstr_predict_forest_logreg(
         y_test,
         y_encoder,
         also_return_proba=also_return_proba,
-        solver="newton-cg",
+        solver=logreg_solver,
         n_jobs=4,
     )
 
