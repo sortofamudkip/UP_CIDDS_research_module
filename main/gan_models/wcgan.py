@@ -25,12 +25,14 @@ class ClipConstraint(Constraint):
         return {"clip_value": self.clip_value}
 
 
+clip_constraint = ClipConstraint(0.01)
+
+
 class WCGAN(CGAN):
     def __init__(self, discriminator, generator, latent_dim: int, num_y_cols: int):
         super().__init__(discriminator, generator, latent_dim)
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
-        self.clip_constraint = ClipConstraint(0.01)
 
     def train_D(self, real_samples, y_labels: np.array):
         # & Generate fake data (train D)
@@ -46,14 +48,14 @@ class WCGAN(CGAN):
         # ^ generated_images shape: (batch_size, ncols(X))
         generated_images_X = self.generator(noise_for_generator)
         # ^ images_concat_labels shape: (batch_size, ncols(X)+ncols(Y))
-        images_concat_labels = tf.concat((generated_images_X, y_labels), axis=1)
+        synthetic_concat_labels = tf.concat((generated_images_X, y_labels), axis=1)
 
         # vstack rows of real and fake data to form the training set's X
-        all_samples = tf.concat((real_samples, images_concat_labels), axis=0)
+        all_samples = tf.concat((real_samples, synthetic_concat_labels), axis=0)
         # * stack rows of real and fake labels to form the training set's y.
         # *   in a WGAN, real is -1, fake is +1
         all_samples_labels = tf.concat(
-            [tf.fill((batch_size, 1), -1), tf.ones((batch_size, 1))], axis=0
+            [-1 * tf.ones((batch_size, 1)), tf.ones((batch_size, 1))], axis=0
         )
 
         # & Train Discriminator
@@ -75,11 +77,11 @@ class WCGAN(CGAN):
 
         # & Train Generator
         # Assemble labels that say "all real (WGAN: -1) images", even though all samples here are fake.
-        misleading_labels = tf.fill((batch_size, 1), -1)
+        misleading_labels = -1 * tf.ones((batch_size, 1))
         with tf.GradientTape() as tape:
             generated_samples_X = self.generator(random_vector_labels)
-            images_concat_labels = tf.concat((generated_samples_X, y_labels), axis=1)
-            predictions = self.discriminator(images_concat_labels)
+            sythetic_concat_labels = tf.concat((generated_samples_X, y_labels), axis=1)
+            predictions = self.discriminator(sythetic_concat_labels)
             g_loss = self.loss_fn(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
@@ -101,7 +103,7 @@ class WCGAN(CGAN):
 
         # & Update loss
         self.gen_loss_tracker.update_state(g_loss)
-        self.disc_loss_tracker.update_state(d_loss.mean())
+        self.disc_loss_tracker.update_state(d_losses.mean())
         return {
             "g_loss": self.gen_loss_tracker.result(),
             "d_loss": self.disc_loss_tracker.result(),
@@ -116,7 +118,7 @@ class WCGAN_pipeline(BasicGANPipeline):
         pipeline_name: str,
         subset=0.25,
         batch_size: int = 128,
-        latent_dim: int = 0,
+        latent_dim: int = 32,
     ) -> None:
         super().__init__(
             dataset_filename,
@@ -169,19 +171,19 @@ class WCGAN_pipeline(BasicGANPipeline):
                     80,
                     activation="relu",
                     input_shape=(input_shape,),
-                    kernel_constraint=self.clip_constraint,
+                    kernel_constraint=clip_constraint,
                 ),
                 keras.layers.Dense(
-                    80, activation="relu", kernel_constraint=self.clip_constraint
+                    80, activation="relu", kernel_constraint=clip_constraint
                 ),
                 keras.layers.Dense(
-                    80, activation="relu", kernel_constraint=self.clip_constraint
+                    80, activation="relu", kernel_constraint=clip_constraint
                 ),
                 keras.layers.Dense(
-                    80, activation="relu", kernel_constraint=self.clip_constraint
+                    80, activation="relu", kernel_constraint=clip_constraint
                 ),
                 keras.layers.Dense(
-                    80, activation="relu", kernel_constraint=self.clip_constraint
+                    80, activation="relu", kernel_constraint=clip_constraint
                 ),
                 keras.layers.Dense(
                     1, activation="linear"
@@ -228,21 +230,15 @@ class WCGAN_pipeline(BasicGANPipeline):
     def wasserstein_loss(y_true, y_pred):
         return backend.mean(y_true * y_pred)
 
-    def compile_and_fit_GAN(
-        self, d_learning_rate=0.0003, g_learning_rate=0.0001, beta_1=0.9, epochs=2
-    ):
+    def compile_and_fit_GAN(self, d_learning_rate, g_learning_rate, beta_1, epochs):
         self.gan.compile(
-            d_optimizer=keras.optimizers.Adam(
-                learning_rate=d_learning_rate, beta_1=beta_1
-            ),
-            g_optimizer=keras.optimizers.Adam(
-                learning_rate=g_learning_rate, beta_1=beta_1
-            ),
+            d_optimizer=keras.optimizers.RMSprop(learning_rate=d_learning_rate),
+            g_optimizer=keras.optimizers.RMSprop(learning_rate=g_learning_rate),
             loss_fn=self.wasserstein_loss,
         )
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            verbose=1,
+            verbose=0,
         )
         return self.history
