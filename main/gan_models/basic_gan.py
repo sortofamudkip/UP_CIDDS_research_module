@@ -380,6 +380,10 @@ class BasicGANPipeline(GenericPipeline):
             logging.info(
                 f"Generated {len(plausible_samples)} plausible samples (retention score: {retention_score:.2f})"
             )
+            if retention_score <= 0.01:
+                print("Generated less than 0.01 plausible samples!")
+                logging.warning("Generated less than 0.01 plausible samples!")
+                assert False
 
         retention_scores = np.array(retention_scores)
 
