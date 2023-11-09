@@ -1,4 +1,68 @@
 import numpy as np
+import pandas as pd
+
+
+class IP_Preprocessor:
+    def __init__(self) -> None:
+        self.ip_dict = {}
+
+    def fit(self, ip_col: pd.Series) -> None:
+        """Fit the preprocessor to the given IP column.
+
+        Args:
+            ip_col (pd.Series): the IP column to fit to.
+        """
+        unique_ips_in_col = ip_col.unique()
+        self.ip_dict = self._get_ip_dict(unique_ips_in_col)
+
+    def _get_ip_dict(self, ip_col: pd.Series) -> dict:
+        """Get the IP dictionary from the given IP column.
+
+        Args:
+            ip_col (pd.Series): the IP column to get the dictionary from.
+
+        Returns:
+            dict: the IP dictionary.
+        """
+        ip_dict = {}
+        for ip in ip_col:
+            if ip not in ip_dict:
+                ip_dict[ip] = _deanonymise_IP(ip)
+        return ip_dict
+
+    def transform(self, ip_col: pd.Series) -> pd.Series:
+        """Transform the given IP column.
+
+        Args:
+            ip_col (pd.Series): the IP column to transform.
+
+        Returns:
+            pd.Series: the transformed IP column.
+        """
+        return ip_col.apply(self._transform_ip)
+
+    def _transform_ip(self, ip: str) -> str:
+        """Transform the given IP.
+
+        Args:
+            ip (str): the IP to transform.
+
+        Returns:
+            str: the transformed IP.
+        """
+        return self.ip_dict[ip]
+
+    def fit_transform(self, ip_col: pd.Series) -> pd.Series:
+        """Fit and transform the given IP column.
+
+        Args:
+            ip_col (pd.Series): the IP column to fit and transform.
+
+        Returns:
+            pd.Series: the transformed IP column.
+        """
+        self.fit(ip_col)
+        return self.transform(ip_col)
 
 
 def _random_IP_addr(random_seed=555, final_digit=0):
