@@ -12,12 +12,13 @@ from .preprocessing_utils.general.encode import (
 from .preprocessing_utils.N.encode import scale_ports_N, _process_N_WGAN_GP_ips
 from .preprocessing_utils.N.decode import decode_IP_N_WGAN_GP
 
-from .preprocessing_utils.general.ip_utils import _deanonymise_IP
+from .preprocessing_utils.general.ip_utils import IP_Preprocessor
 from .preprocessing_utils.B.encode import (
     _int_to_binary_cols,
     _to_binary_str,
     _process_B_WGAN_GP_ips,
 )
+import logging
 
 
 def decode_N_WGAN_GP(
@@ -144,6 +145,7 @@ def get_N_WGAN_GP_preprocessed_data(
     Returns:
         list: [full_X, y, y_encoder, x_labels, x_encoders]
     """
+    logging.debug("Start preprocessing data using N_WGAN_GP method.")
     # if binary labels: drop V, U, S
     to_drop_indices = (
         data[
@@ -156,12 +158,21 @@ def get_N_WGAN_GP_preprocessed_data(
     )
     subset = data.drop(to_drop_indices)
 
+    logging.debug("Processing cols: Duration, Bytes and Packets...")
     dur_bytes_packets_scaler, dur_bytes_packets_scaled = scale_min_max(
         subset[["Duration", "Bytes", "Packets"]]
     )
+
+    logging.debug("Processing cols: SrcPt and DstPt...")
     ports_normed = scale_ports_N(subset[["SrcPt", "DstPt"]])
+
+    logging.debug("Processing cols: Proto...")
     enc_proto, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+
+    logging.debug("Processing cols: Flags...")
     onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
+
+    logging.debug("Assembling full_X...")
     full_X = np.hstack(
         [
             dur_bytes_packets_scaled,
@@ -170,6 +181,8 @@ def get_N_WGAN_GP_preprocessed_data(
             onehotencoded_flags,
         ]
     )
+
+    logging.debug("Assembling x_labels and x_encoders...")
     # labels: ["Duration", "Bytes", "Packets", "SrcPt", "DstPt", PROTOCOLS GO HERE, TCP FLAGS GO HERE]
     x_labels = (
         ["Duration", "Bytes", "Packets", "SrcPt", "DstPt"] + proto_labels + flags_labels
@@ -181,14 +194,19 @@ def get_N_WGAN_GP_preprocessed_data(
 
     # when including date and ip, fetch their columns as well (always yes for GANs)
     if include_date_ip:
+        logging.debug("Processing cols: SrcIP and DstIP...")
         src_ips = _process_N_WGAN_GP_ips(subset["SrcIP"])
         dest_ips = _process_N_WGAN_GP_ips(subset["DstIP"])
+
+        logging.debug("Processing col: Date_first_seen...")
         (
             enc_date_first_seen,
             onehotencoded_days_of_week,
             days_of_week_labels,
             seconds_normed,
         ) = _preprocess_date_first_seen(subset["Date_first_seen"])
+
+        logging.debug("Assembling X data with IP and Date_first_seen...")
         full_X = np.hstack(
             [full_X, src_ips, dest_ips, onehotencoded_days_of_week, seconds_normed]
         )
@@ -200,8 +218,10 @@ def get_N_WGAN_GP_preprocessed_data(
         )
         x_encoders["Date_first_seen"] = enc_date_first_seen
 
+    logging.debug("Processing col: class...")
     y, y_encoder = _encode_y(subset["class"].to_numpy())
 
+    logging.info("Finished preprocessing data using N_WGAN_GP method.")
     return full_X, y, y_encoder, x_labels, x_encoders
 
 
