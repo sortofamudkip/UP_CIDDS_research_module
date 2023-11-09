@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from ..general.ip_utils import _deanonymise_IP
+from ..general.ip_utils import _deanonymise_IP, IP_Preprocessor
 
 
 def scale_ports_N(data: pd.DataFrame) -> np.array:
@@ -22,9 +22,7 @@ def _process_N_WGAN_GP_ips(column: pd.Series):
     Returns:
         _type_: _description_
     """
-    return (
-        column.apply(_deanonymise_IP)
-        .str.split(".", expand=True)
-        .to_numpy(dtype=np.int16)
-        / 255
-    )
+    ip_processor = IP_Preprocessor()
+    ip_processor.fit(column)
+    denonymised_ips = ip_processor.transform(column)
+    return denonymised_ips.str.split(".", expand=True).to_numpy(dtype=np.int16) / 255
