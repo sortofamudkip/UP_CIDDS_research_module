@@ -8,11 +8,12 @@ from sys import stdout, stderr
 from sklearn.preprocessing import OneHotEncoder
 from keras import backend
 from keras.constraints import Constraint
+import logging
 
 
 class WCGAN_GP(CGAN):
     def __init__(self, discriminator, generator, latent_dim: int, num_y_cols: int):
-        super().__init__(discriminator, generator, latent_dim)
+        super().__init__(discriminator, generator, latent_dim, num_y_cols)
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
         self.gp_weight = 10.0
@@ -55,21 +56,14 @@ class WCGAN_GP(CGAN):
             [-1 * tf.ones((batch_size, 1)), tf.ones((batch_size, 1))], axis=0
         )
 
-        # get logits of real and fake data
-        # * logits_real shape: (batch_size, 1)
-        # * logits_fake shape: (batch_size, 1)
-        logits_real, logits_fake = tf.split(
-            self.discriminator(all_samples), num_or_size_splits=2, axis=0
-        )
-
         # & Train Discriminator
         with tf.GradientTape() as tape:
             predictions = self.discriminator(all_samples)
             d_loss = self.loss_fn(all_samples_labels, predictions)
             gp = self.gradient_penalty(
                 batch_size,
-                logits_real,  # logits of real samples
-                logits_fake,  # logits of fake samples
+                real_samples,  # logits of real samples
+                synthetic_concat_labels,  # logits of fake samples
             )
             d_loss += self.gp_weight * gp
         grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
@@ -105,15 +99,14 @@ class WCGAN_GP(CGAN):
 
         # * in WCGAN, update D more times than G
         UPDATE_D_TIMES = 5
-        d_losses = np.zeros(UPDATE_D_TIMES)
         for i in range(UPDATE_D_TIMES):
             d_loss = self.train_D(real_samples, y_labels)
-            d_losses[i] = d_loss
         g_loss = self.train_G(batch_size, y_labels)
 
         # & Update loss
+        # ! Turn this off for now
         self.gen_loss_tracker.update_state(g_loss)
-        self.disc_loss_tracker.update_state(d_losses.mean())
+        self.disc_loss_tracker.update_state(d_loss)
         return {
             "g_loss": self.gen_loss_tracker.result(),
             "d_loss": self.disc_loss_tracker.result(),
@@ -129,6 +122,7 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         subset=0.25,
         batch_size: int = 128,
         latent_dim: int = 32,
+        use_balanced_dataset: bool = True,
     ) -> None:
         super().__init__(
             dataset_filename,
@@ -137,10 +131,11 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
             subset,
             batch_size,
             latent_dim,
+            use_balanced_dataset,
         )
 
     def get_GAN(self):
-        return CGAN(
+        return WCGAN_GP(
             discriminator=self.discriminator,
             generator=self.generator,
             latent_dim=self.latent_dim,
@@ -154,6 +149,7 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
     ## * focus 2 classes
 
     def get_generator(self):
+        logging.info("Using WCGAN-GP Generator.")
         final_layer = self.create_generator_final_layer(self.X_colnames, y_col_num=0)
         # * For CGANs, the y labels are also added to the generator.
         input_shape = self.latent_dim + self.y_cols_len
@@ -161,6 +157,7 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         output_shape = self.X.shape[1]
         generator = keras.Sequential(
             [
+                keras.layers.BatchNormalization(),
                 keras.layers.Dense(80, activation="relu", input_shape=(input_shape,)),
                 keras.layers.Dense(80, activation="relu"),
                 keras.layers.Dense(80, activation="relu"),
@@ -174,9 +171,11 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         return generator
 
     def get_discriminator(self):
+        logging.info("Using WCGAN-GP Discriminator (Critic).")
         input_shape = self.X.shape[1] + self.y.shape[1]
         discriminator = keras.Sequential(
             [
+                keras.layers.BatchNormalization(),
                 keras.layers.Dense(
                     80,
                     activation="relu",
@@ -244,10 +243,10 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         return backend.mean(y_true * y_pred)
 
     def compile_and_fit_GAN(self, d_learning_rate, g_learning_rate, beta_1, epochs):
-        beta_1 = 0.0  # according to the paper???
-        beta_2 = 0.9  # according to the paper???
-        # beta_1 = 0.9  # default
-        # beta_2 = 0.999  # default
+        # beta_1 = 0.0  # according to the paper???
+        # beta_2 = 0.9  # according to the paper???
+        beta_1 = 0.9  # default
+        beta_2 = 0.999  # default
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
                 learning_rate=d_learning_rate, beta_1=beta_1, beta_2=beta_2
@@ -260,6 +259,6 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            verbose=0,
+            verbose=1,
         )
         return self.history
