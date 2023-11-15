@@ -94,6 +94,7 @@ class CGAN_pipeline(BasicGANPipeline):
         subset=0.25,
         batch_size: int = 128,
         latent_dim: int = 0,
+        use_balanced_dataset: bool = True,
     ) -> None:
         super().__init__(
             dataset_filename,
@@ -102,6 +103,7 @@ class CGAN_pipeline(BasicGANPipeline):
             subset,
             batch_size,
             latent_dim,
+            use_balanced_dataset,
         )
 
     def get_GAN(self):
