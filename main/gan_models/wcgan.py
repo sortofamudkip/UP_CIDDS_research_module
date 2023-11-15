@@ -29,7 +29,13 @@ clip_constraint = ClipConstraint(0.01)
 
 
 class WCGAN(CGAN):
-    def __init__(self, discriminator, generator, latent_dim: int, num_y_cols: int):
+    def __init__(
+        self,
+        discriminator,
+        generator,
+        latent_dim: int,
+        num_y_cols: int,
+    ):
         super().__init__(discriminator, generator, latent_dim)
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
@@ -119,6 +125,7 @@ class WCGAN_pipeline(BasicGANPipeline):
         subset=0.25,
         batch_size: int = 128,
         latent_dim: int = 32,
+        use_balanced_dataset: bool = True,
     ) -> None:
         super().__init__(
             dataset_filename,
@@ -127,6 +134,7 @@ class WCGAN_pipeline(BasicGANPipeline):
             subset,
             batch_size,
             latent_dim,
+            use_balanced_dataset,
         )
 
     def get_GAN(self):
@@ -239,6 +247,6 @@ class WCGAN_pipeline(BasicGANPipeline):
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            verbose=0,
+            verbose=1,
         )
         return self.history
