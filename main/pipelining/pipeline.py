@@ -1,4 +1,5 @@
 from contextlib import redirect_stdout
+from doctest import debug
 import json
 from pathlib import Path
 import numpy as np
@@ -164,6 +165,8 @@ def run_pipeline(
     fold: str = "",  # used to give different file names for crossval
     latent_dim: int = 0,  # ^ since latent size is also a hyperparam
     synthetic_to_real_ratio: float = -1,  # ^ for T(S+R)TR
+    use_balanced_dataset: bool = True,  # whether to use a balanced dataset for training or not
+    is_debug: bool = False,
 ) -> Dict[str, Any]:
     """
     Runs a GAN pipeline with the given parameters.
@@ -196,9 +199,9 @@ def run_pipeline(
     output_dir = create_output_dir(pipeline_name, bool(fold))
     output_file_name = str((output_dir / f"log{fold}.log").resolve())
     logging.basicConfig(
-        filename=output_file_name,
+        filename=output_file_name if not is_debug else None,
         encoding="utf-8",
-        level=logging.INFO,
+        level=logging.INFO if not is_debug else logging.DEBUG,
         force=True,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
@@ -212,6 +215,7 @@ def run_pipeline(
         subset=False,
         batch_size=batch_size,
         latent_dim=latent_dim,
+        use_balanced_dataset=use_balanced_dataset,
     )
 
     # Save summary of parameters
@@ -227,6 +231,7 @@ def run_pipeline(
             "preprocessing_method": str(preprocessor_function),
             "num_classes": num_classes,
             "synthetic_to_real_ratio": synthetic_to_real_ratio,
+            "use_balanced_dataset": use_balanced_dataset,
         }
         json.dump(params, f, indent=4)
     logging.info(f"Parameters summary saved in results/{pipeline_name}/params.json")
@@ -236,7 +241,7 @@ def run_pipeline(
     gan_history = gan_pipeline.compile_and_fit_GAN(
         d_learning_rate=d_learning_rate,
         g_learning_rate=g_learning_rate,
-        beta_1=0.90,
+        beta_1=0.50,
         epochs=num_epochs,
     )
     # plot and save losses
@@ -255,6 +260,22 @@ def run_pipeline(
     # load test data
     logging.info("Loading test data...")
     X_test, y_test = load_testdata(test_data_pickle_fname, num_classes)
+    if debug:
+        # & Debug GAN
+        logging.debug(X_test.mean(axis=1))
+        logging.info("Using test X!!!")
+        logging.debug(y_test[:5])
+        unraveled_y = y_test.ravel()
+        X_test[unraveled_y == "normal"] = 0.2 + np.random.uniform(
+            -0.01, 0.01, size=X_test[unraveled_y == "normal"].shape
+        )
+        X_test[unraveled_y == "attacker"] = 0.8 + np.random.uniform(
+            -0.01, 0.01, size=X_test[unraveled_y == "attacker"].shape
+        )
+        logging.debug("X_test mean:")
+        logging.debug(X_test[unraveled_y == "normal"].mean(axis=1).mean())
+        logging.debug("y_test mean:")
+        logging.debug(X_test[unraveled_y == "attacker"].mean(axis=1).mean())
 
     # generate and evaluate synthetic data
     logging.info("Evaluating synthetic data...")
