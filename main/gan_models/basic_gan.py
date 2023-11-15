@@ -34,10 +34,12 @@ class BasicGAN(keras.Model):
         if custom_metrics:
             super().compile(metrics=["accuracy"])
         else:
-            super().compile()
+            super().compile(run_eagerly=True)
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
         self.loss_fn = loss_fn
+        self.gen_loss_tracker = keras.metrics.Mean(name="d_loss")
+        self.disc_loss_tracker = keras.metrics.Mean(name="g_loss")
 
     def train_step(self, data):
         # Unpack the real data.
@@ -125,6 +127,7 @@ class BasicGANPipeline(GenericPipeline):
         subset=0.25,
         batch_size: int = 128,
         latent_dim: int = 0,
+        use_balanced_dataset: bool = False,  # whether to balance the dataset or not
     ) -> None:
         super().__init__()
         self.subset = subset
@@ -132,6 +135,8 @@ class BasicGANPipeline(GenericPipeline):
         self.history = None
         self.decoding_func = decoding_func
         self.pipeline_name = pipeline_name
+        self.use_balanced_dataset = use_balanced_dataset
+        self.shuffle_size = 16384
 
         # these are to be filled out by self.load_data
         self.X = None  # * original (real) X, NOT synthetic
@@ -141,7 +146,9 @@ class BasicGANPipeline(GenericPipeline):
         self.all_col_labels = None
         self.X_encoders = None
         self.y_encoder = None
-        train_loader, num_cols = self.load_data(dataset_filename)
+        train_loader, num_cols = self.load_data(
+            dataset_filename, self.use_balanced_dataset
+        )
         self.y_cols_len = self.get_y_cols_len()
         # ^ if latent_dim is not defined, set it to num_cols.
         self.latent_dim = latent_dim if latent_dim != 0 else num_cols
@@ -204,7 +211,7 @@ class BasicGANPipeline(GenericPipeline):
 
         return FinalActivation()
 
-    def load_data(self, filename: str):
+    def load_data(self, filename: str, use_balanced_dataset: bool):
         ################################
         #    Loading data from file    #
         ################################
@@ -238,9 +245,50 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         # Convert to Dataloader format #
         ################################
-        dataset = tf.data.Dataset.from_tensor_slices(sampled_dataset)
-        dataset = dataset.shuffle(buffer_size=8192).batch(self.batch_size)
+        if len(y_encoder.classes_) == 2 and use_balanced_dataset:
+            logging.info("Using balanced dataset for training.")
+            dataset = self.get_balanced_dataset(sampled_dataset)
+        else:
+            logging.info("Using imbalanced (original) dataset for training.")
+            dataset = self.get_unbalanced_dataset(sampled_dataset)
+        dataset = dataset.shuffle(buffer_size=self.shuffle_size).batch(self.batch_size)
         return dataset, sampled_dataset.shape[1]
+
+    def get_balanced_dataset(self, dataset_np: np.array) -> tf.data.Dataset:
+        """
+        Returns a balanced dataset as a TensorFlow dataset object. Binary classification only.
+
+        Args:
+        - dataset_np: A numpy array containing the dataset.
+
+        Returns:
+        - A TensorFlow dataset object containing the balanced dataset.
+        """
+        raveled_y = self.y.ravel()  # by this point, self.y is already initialized
+        # split into real and fake
+        normal_samples = dataset_np[raveled_y == 1, :]  # 1 is normal
+        attacker_samples = dataset_np[raveled_y == 0, :]  # 0 is attacker
+        # turn into td.data.Dataset
+        normal_dataset = tf.data.Dataset.from_tensor_slices(normal_samples)
+        attacker_dataset = tf.data.Dataset.from_tensor_slices(attacker_samples)
+        # use tf.data.Dataset.sample_from_datasets to sample from both datasets
+        dataset = tf.data.Dataset.sample_from_datasets(
+            [normal_dataset, attacker_dataset], [0.5, 0.5]
+        )
+        return dataset
+
+    def get_unbalanced_dataset(self, dataset_np: np.array) -> tf.data.Dataset:
+        """
+        Returns an unbalanced dataset as a TensorFlow dataset object.
+
+        Args:
+        - dataset_np: A numpy array containing the dataset.
+
+        Returns:
+        - A TensorFlow dataset object containing the unbalanced dataset.
+        """
+        dataset = tf.data.Dataset.from_tensor_slices(dataset_np)
+        return dataset
 
     def get_X_y(self):
         return self.X, self.y_encoder.inverse_transform(self.y)
@@ -289,7 +337,7 @@ class BasicGANPipeline(GenericPipeline):
         )
 
     def compile_and_fit_GAN(
-        self, d_learning_rate=0.0003, g_learning_rate=0.0001, beta_1=0.9, epochs=2
+        self, d_learning_rate: float, g_learning_rate: float, beta_1: float, epochs: int
     ):
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
@@ -358,32 +406,41 @@ class BasicGANPipeline(GenericPipeline):
         cur_num_rows = 0
         retention_scores = []
 
+        n_target_rows = int(n_target_rows)  # just in case it's a float
+
         logging.info(f"Generating {n_target_rows} plausible samples...")
         while cur_num_rows < n_target_rows:
             # * generate samples and decode them to human format (pandas df)
-            samples_np = self.generate_samples(len(self.X))
+            samples_np = self.generate_samples(self.X.shape[0])
             samples_df = self.decode_samples_to_human_format(samples_np)
 
             # * filter out implausible rows
             filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
+            # # & DEBUG:
+            # logging.info("turning off plausible rows mask!!!")
+            # logging.debug(filtered_mask)
+            # logging.debug(filtered_mask.shape)
+            # plausible_samples = samples_np
             plausible_samples = samples_np[filtered_mask]
 
             # * add to list of plausible samples
             all_plausible_samples.append(plausible_samples)
 
             # * update retention score
-            retention_score = len(plausible_samples) / len(self.X)
+            retention_score = plausible_samples.shape[0] / self.X.shape[0]
             retention_scores.append(retention_score)
-            cur_num_rows += len(plausible_samples)
+            cur_num_rows += plausible_samples.shape[0]
 
             # * logging
             logging.info(
-                f"Generated {len(plausible_samples)} plausible samples (retention score: {retention_score:.2f})"
+                f"Generated {plausible_samples.shape[0]} plausible samples (retention score: {retention_score:.2f})"
             )
             if retention_score <= 0.01:
                 print("Generated less than 0.01 plausible samples!")
                 logging.warning("Generated less than 0.01 plausible samples!")
-                assert False
+                assert (
+                    False
+                ), "Early stopping: generated less than 0.01 plausible samples!"
 
         retention_scores = np.array(retention_scores)
 
