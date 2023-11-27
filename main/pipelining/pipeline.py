@@ -266,16 +266,17 @@ def run_pipeline(
         logging.info("Using test X!!!")
         logging.debug(y_test[:5])
         unraveled_y = y_test.ravel()
-        X_test[unraveled_y == "normal"] = 0.2 + np.random.uniform(
-            -0.01, 0.01, size=X_test[unraveled_y == "normal"].shape
-        )
-        X_test[unraveled_y == "attacker"] = 0.8 + np.random.uniform(
+        X_test = X_test[:, :2]  # only take first two cols
+        X_test[unraveled_y == "attacker"] = 0.2 + np.random.uniform(
             -0.01, 0.01, size=X_test[unraveled_y == "attacker"].shape
         )
-        logging.debug("X_test mean:")
-        logging.debug(X_test[unraveled_y == "normal"].mean(axis=1).mean())
-        logging.debug("y_test mean:")
-        logging.debug(X_test[unraveled_y == "attacker"].mean(axis=1).mean())
+        X_test[unraveled_y == "normal"] = 0.8 + np.random.uniform(
+            -0.01, 0.01, size=X_test[unraveled_y == "normal"].shape
+        )
+        # logging.debug("X_test mean:")
+        # logging.debug(X_test[unraveled_y == "normal"].mean(axis=1).mean())
+        # logging.debug("y_test mean:")
+        # logging.debug(X_test[unraveled_y == "attacker"].mean(axis=1).mean())
 
     # generate and evaluate synthetic data
     logging.info("Evaluating synthetic data...")
