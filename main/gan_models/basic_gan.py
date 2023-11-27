@@ -18,7 +18,9 @@ import logging
 
 
 class BasicGAN(keras.Model):
-    def __init__(self, discriminator, generator, latent_dim: int):
+    def __init__(
+        self, discriminator: keras.Model, generator: keras.Model, latent_dim: int
+    ):
         super().__init__()
         self.discriminator = discriminator
         self.generator = generator
@@ -35,9 +37,12 @@ class BasicGAN(keras.Model):
             super().compile(metrics=["accuracy"])
         else:
             super().compile(run_eagerly=True)
+        logging.info("Compiling GAN...")
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
         self.loss_fn = loss_fn
+        self.discriminator.compile(optimizer=self.d_optimizer, loss=self.loss_fn)
+        self.generator.compile(optimizer=self.g_optimizer, loss=self.loss_fn)
         self.gen_loss_tracker = keras.metrics.Mean(name="d_loss")
         self.disc_loss_tracker = keras.metrics.Mean(name="g_loss")
 
@@ -259,7 +264,7 @@ class BasicGANPipeline(GenericPipeline):
         Returns a balanced dataset as a TensorFlow dataset object. Binary classification only.
 
         Args:
-        - dataset_np: A numpy array containing the dataset.
+        - dataset_np: A numpy array containing the dataset (both X and y).
 
         Returns:
         - A TensorFlow dataset object containing the balanced dataset.
@@ -412,16 +417,19 @@ class BasicGANPipeline(GenericPipeline):
         while cur_num_rows < n_target_rows:
             # * generate samples and decode them to human format (pandas df)
             samples_np = self.generate_samples(self.X.shape[0])
-            samples_df = self.decode_samples_to_human_format(samples_np)
+            samples_df = self.decode_samples_to_human_format(
+                samples_np
+            )  # ! FOR DEBUG: TURN THIS OFF
 
             # * filter out implausible rows
-            filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
-            # # & DEBUG:
-            # logging.info("turning off plausible rows mask!!!")
+            filtered_mask = mask_plausible_rows(
+                samples_df, num_classes=2
+            )  # ! FOR DEBUG: TURN THIS OFF
+            # logging.warning("turning off plausible rows mask!!!")
             # logging.debug(filtered_mask)
             # logging.debug(filtered_mask.shape)
-            # plausible_samples = samples_np
-            plausible_samples = samples_np[filtered_mask]
+            # plausible_samples = samples_np # & FOR DEBUG: TURN THIS ON
+            plausible_samples = samples_np[filtered_mask]  # ! FOR DEBUG: TURN THIS OFF
 
             # * add to list of plausible samples
             all_plausible_samples.append(plausible_samples)
