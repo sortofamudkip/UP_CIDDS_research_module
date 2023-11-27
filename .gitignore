@@ -155,3 +155,6 @@ cython_debug/
 dataset/
 .DS_Store
 jobs/
+
+# hyperparam tuning
+hp_tuning_*/
