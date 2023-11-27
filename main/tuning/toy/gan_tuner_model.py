@@ -25,7 +25,14 @@ class GANTunerModel(kt.HyperModel):
         # TSTR: train synthetic, test real
         # The GAN produces synthetic samples which are then used to train a classifier,
         #   then the classifier is evaluated on real data.
-        # ^ don't touch this until this code can run!!
+        # ^ Create a dataset with the synthetic samples
+        num_samples = X_test.shape[0]
+        ## + Generate random labels from unifrom distribution
+        y_fake = model.generate_fake_labels(num_samples)
+        # ! KEEP WORKING FROM HERE
+        ## + Generate synthetic samples
+        # ^ Train a classifier on the synthetic samples
+        # ^ Evaluate classifier on real data (X_test, y_test) to get TSTR score
         return np.random.uniform(low=0, high=1, size=1)[0]
 
     def fit(
