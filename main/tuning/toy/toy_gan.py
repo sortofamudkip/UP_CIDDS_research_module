@@ -103,7 +103,7 @@ class WCGAN_GP(tf.keras.Model):
     def wasserstein_loss(self, y_true, y_pred):
         return tf.reduce_mean(y_true * y_pred)
 
-    def generate_fake_labels(self, batch_size):
+    def generate_fake_labels(self, batch_size) -> tf.Tensor:
         labels = tf.random.uniform(
             (batch_size,), maxval=self.num_classes, dtype=tf.int32
         )
