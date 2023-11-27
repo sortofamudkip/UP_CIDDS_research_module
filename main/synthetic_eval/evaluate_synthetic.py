@@ -87,7 +87,7 @@ def tstr_predict_forest_logreg(
         y_test,
         y_encoder,
         also_return_proba=also_return_proba,
-        n_estimators=51,
+        n_estimators=11,
         n_jobs=4,
     )
     y_predict_logreg = models.logistic_reg_train_predict(
