@@ -3,6 +3,7 @@ from tensorflow.keras import layers, models
 from tensorflow.keras.optimizers import Adam
 from hyperparams import DEFAULT_HYPERPARAMS_TO_TUNE, recursive_dict_union
 import logging
+import numpy as np
 
 
 class WCGAN_GP(tf.keras.Model):
@@ -167,3 +168,11 @@ class WCGAN_GP(tf.keras.Model):
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         return {"d_loss": d_loss, "g_loss": g_loss}
+
+
+# create a keras.callbacks.Callback class that stops training if d_loss or g_loss is NaN
+class StopTrainingOnNaNCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        if logs["d_loss"] == np.nan or logs["g_loss"] == np.nan:
+            logging.warning("d_loss or g_loss is NaN, stopping training")
+            self.model.stop_training = True
