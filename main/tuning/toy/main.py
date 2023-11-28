@@ -28,9 +28,9 @@ tuner = kt.RandomSearch(
     hypermodel=hypermodel,
     # no objective because it's the return value of `HyperModel.fit()`;
     # if it doesn't work, try https://keras.io/guides/keras_tuner/getting_started/#custom-metric-as-the-objective
-    max_trials=5,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
+    max_trials=10,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
     executions_per_trial=1,  # * how many times to train a model with the same hps
-    overwrite=True,
+    overwrite=True,  # * overwrite previous results
     directory="hp_tuning_toy_dir",
     project_name="toy_wcgan_gp",
 )
@@ -39,7 +39,11 @@ tuner.search(
     real_dataset=train_dataset,
     X_test=X_test,
     y_test=y_test,
-    epochs=3,
 )
 
-print(tuner.results_summary())
+tuner.results_summary()
+best_hps = tuner.get_best_hyperparameters()[0]
+print("Best values:", best_hps.values)
+
+# best_model = tuner.get_best_models()[0]
+# best_model.summary()
