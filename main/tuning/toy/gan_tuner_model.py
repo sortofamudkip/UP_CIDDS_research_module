@@ -2,7 +2,7 @@ import logging
 import tensorflow as tf
 import keras_tuner as kt
 import numpy as np
-from toy_gan import WCGAN_GP
+from toy_gan import WCGAN_GP, StopTrainingOnNaNCallback
 from hyperparams import get_hyperparams_to_tune, DEFAULT_HYPERPARAMS_TO_TUNE
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score
@@ -59,11 +59,19 @@ class GANTunerModel(kt.HyperModel):
         real_dataset: tf.data.Dataset,  # big tensor with ALL the data [X,y]
         X_test: np.array,
         y_test: np.array,
+        callbacks: list = None,
         **kwargs: dict,  # for epochs, batch_size, etc.
     ):
         # train the gan model
         hp_num_epochs = self.hyperparams_to_tune["num_epochs"]
-        model.fit(real_dataset, epochs=hp_num_epochs, **kwargs)
+        hp_batch_size = self.hyperparams_to_tune["batch_size"]
+        model.fit(
+            real_dataset.batch(hp_batch_size),
+            epochs=hp_num_epochs,
+            verbose=0,
+            callbacks=[StopTrainingOnNaNCallback()],
+            **kwargs,
+        )
         # evaluate the gan model
         tstr_score = self.evaluate_TSTR(model, X_test, y_test)
         return -tstr_score  # we want to maximize this score, so we return the negative

@@ -29,9 +29,7 @@ def get_train_dataset() -> tf.data.Dataset:
     entire_dataset = np.hstack((just_data, just_labels))
 
     # Create a TensorFlow Dataset
-    dataset = (
-        tf.data.Dataset.from_tensor_slices(entire_dataset).shuffle(10000).batch(64)
-    )
+    dataset = tf.data.Dataset.from_tensor_slices(entire_dataset).shuffle(10000)
     return dataset
 
 
