@@ -1,8 +1,11 @@
+import logging
 import tensorflow as tf
 import keras_tuner as kt
 import numpy as np
 from toy_gan import WCGAN_GP
 from hyperparams import get_hyperparams_to_tune, DEFAULT_HYPERPARAMS_TO_TUNE
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score
 
 
 class GANTunerModel(kt.HyperModel):
@@ -18,7 +21,6 @@ class GANTunerModel(kt.HyperModel):
         )
         # compile the gan model
         model_gan.compile()
-
         return model_gan
 
     def evaluate_TSTR(self, model: WCGAN_GP, X_test: np.array, y_test: np.array):
@@ -28,27 +30,43 @@ class GANTunerModel(kt.HyperModel):
         # ^ Create a dataset with the synthetic samples
         num_samples = X_test.shape[0]
         ## + Generate random labels from unifrom distribution
-        y_fake = model.generate_fake_labels(num_samples)
-        # ! KEEP WORKING FROM HERE
+        y_fake: tf.Tensor = model.generate_fake_labels(num_samples)
         ## + Generate synthetic samples
+        X_fake = model.generate_fake_samples_without_labels(num_samples, y_fake)
+        ## + Convert these two into numpy arrays
+        X_fake = X_fake.numpy()
+        y_fake = y_fake.numpy()
+        ## & if X_fake contains NaNs, warn the user and return positive infinity
+        if np.isnan(X_fake).any():
+            logging.warning("X_fake contains NaNs")
+            return np.inf
         # ^ Train a classifier on the synthetic samples
+        clf = RandomForestClassifier(max_depth=2, random_state=0, n_estimators=11)
+        clf.fit(X_fake, y_fake.ravel())
+
         # ^ Evaluate classifier on real data (X_test, y_test) to get TSTR score
-        return np.random.uniform(low=0, high=1, size=1)[0]
+        # predict on real test data
+        y_pred = clf.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        logging.info(f"Accuracy: {acc}, F1: {f1}")
+        return acc
 
     def fit(
         self,
-        hp: kt.HyperParameters(),  # mandatory?
-        model: WCGAN_GP,  # mandatory?
+        hp: kt.HyperParameters(),  # mandatory
+        model: WCGAN_GP,  # mandatory
         real_dataset: tf.data.Dataset,  # big tensor with ALL the data [X,y]
         X_test: np.array,
         y_test: np.array,
         **kwargs: dict,  # for epochs, batch_size, etc.
     ):
         # train the gan model
-        model.fit(real_dataset, **kwargs)
+        hp_num_epochs = self.hyperparams_to_tune["num_epochs"]
+        model.fit(real_dataset, epochs=hp_num_epochs, **kwargs)
         # evaluate the gan model
         tstr_score = self.evaluate_TSTR(model, X_test, y_test)
-        return tstr_score
+        return -tstr_score  # we want to maximize this score, so we return the negative
 
 
 """
