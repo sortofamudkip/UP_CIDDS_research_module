@@ -126,7 +126,7 @@ class BasicGANPipeline(GenericPipeline):
 
     def __init__(
         self,
-        dataset_filename: str,
+        dataset_filename: str,  # real dataset filename
         decoding_func,  # currently either decode_N_WGAN_GP or decode_B_WGAN_GP
         pipeline_name: str,  # name of the pipeline, for saving models/datasets.
         subset=0.25,
