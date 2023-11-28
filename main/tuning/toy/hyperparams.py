@@ -29,15 +29,17 @@ def get_hyperparams_to_tune(hp: kt.HyperParameters):
     hyperparams_to_tune = {
         "discriminator": {
             "hidden_layer_width": hp.Int(
-                "hidden_layer_width", min_value=64, max_value=512, step=64
+                "hidden_layer_width", min_value=128, max_value=128 * 3, step=128
             ),
-            # "learning_rate": hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4]),
+            "learning_rate": hp.Choice("learning_rate", values=[1e-3, 1e-4, 1e-5]),
         },
         "generator": {
-            # "hidden_layer_width": hp.Int(
-            #     "hidden_layer_width", min_value=64, max_value=512, step=64
-            # ),
-            # "learning_rate": hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4]),
+            "hidden_layer_width": hp.Int(
+                "hidden_layer_width", min_value=128, max_value=128 * 3, step=128
+            ),
+            "learning_rate": hp.Choice("learning_rate", values=[1e-3, 1e-4, 1e-5]),
         },
+        "num_epochs": hp.Int("num_epochs", min_value=10, max_value=100, step=20),
+        "batch_size": hp.Int("batch_size", min_value=32, max_value=128, step=32),
     }
     return hyperparams_to_tune
