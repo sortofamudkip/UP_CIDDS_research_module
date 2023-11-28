@@ -28,7 +28,7 @@ tuner = kt.RandomSearch(
     hypermodel=hypermodel,
     # no objective because it's the return value of `HyperModel.fit()`;
     # if it doesn't work, try https://keras.io/guides/keras_tuner/getting_started/#custom-metric-as-the-objective
-    max_trials=10,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
+    max_trials=5,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
     executions_per_trial=1,  # * how many times to train a model with the same hps
     overwrite=True,  # * overwrite previous results
     directory="hp_tuning_toy_dir",
