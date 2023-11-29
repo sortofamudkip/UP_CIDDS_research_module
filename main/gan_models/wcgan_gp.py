@@ -17,55 +17,61 @@ class WCGAN_GP(CGAN):
         self.num_y_cols = num_y_cols
         self.g_input_dim = self.latent_dim + self.num_y_cols
         self.gp_weight = 10.0
+        self.num_classes = 2 if num_y_cols == 1 else num_y_cols
 
-    def gradient_penalty(self, batch_size, real_samples, fake_samples):
-        # & Get the interpolated samples
+    def wasserstein_loss(self, y_true, y_pred):
+        return tf.reduce_mean(y_true * y_pred)
+
+    def gradient_penalty(
+        self,
+        batch_size,
+        real_samples_without_labels,
+        real_labels,
+        fake_samples_without_labels,
+    ):
         alpha = tf.random.normal([batch_size, 1], 0.0, 1.0)
-        diff = fake_samples - real_samples
-        interpolated = real_samples + alpha * diff
+        interpolated = (
+            alpha * real_samples_without_labels
+            + (1 - alpha) * fake_samples_without_labels
+        )
 
-        # & Get the gradients of the interpolated samples
-        with tf.GradientTape() as t:
-            t.watch(interpolated)
-            pred = self.discriminator(interpolated)
-        grads = t.gradient(pred, [interpolated])[0]
-
-        # & Calculate the norm of the gradients
+        with tf.GradientTape() as gp_tape:
+            gp_tape.watch(interpolated)
+            pred = self.discriminator(tf.concat([interpolated, real_labels], axis=1))
+        grads = gp_tape.gradient(pred, [interpolated])[0]
         norm = tf.sqrt(tf.reduce_sum(tf.square(grads), axis=1))
         gp = tf.reduce_mean((norm - 1.0) ** 2)
         return gp
 
-    def train_D(self, real_samples, y_labels: np.array):
+    def train_D(self, X_real, y_real: np.array):
         # & Generate fake data (train D)
-        batch_size = tf.shape(real_samples)[0]
-        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
-        # * for CGAN, noise_for_generator will also have the one-hot encoded y labels concatenated.
-        noise_for_generator = tf.concat((random_latent_vectors, y_labels), axis=1)
-
-        # & Generate synthetic data
-        # ^ generated_images shape: (batch_size, ncols(X))
-        generated_images_X = self.generator(noise_for_generator)
-        # ^ synthetic_concat_labels shape: (batch_size, ncols(X)+ncols(Y))
-        synthetic_concat_labels = tf.concat((generated_images_X, y_labels), axis=1)
-
-        # vstack rows of real and fake data to form the training set's X
-        all_samples = tf.concat((real_samples, synthetic_concat_labels), axis=0)
-        # * stack rows of real and fake labels to form the training set's y.
-        # *   in a WGAN, real is -1, fake is +1
-        all_samples_labels = tf.concat(
-            [-1 * tf.ones((batch_size, 1)), tf.ones((batch_size, 1))], axis=0
+        batch_size = tf.shape(X_real)[0]
+        # * for CGAN, generate fake labels and concatenate them to the fake samples
+        fake_labels = self.generate_fake_labels(batch_size)
+        fake_samples_without_labels = self.generate_fake_samples_without_labels(
+            batch_size, fake_labels
         )
-
-        # & Train Discriminator
+        # * concatenate the fake labels to the fake samples
+        combined_samples_without_labels = tf.concat(
+            [fake_samples_without_labels, X_real], axis=0
+        )
+        combined_labels = tf.concat([fake_labels, y_real], axis=0)
+        # * Assemble labels that say "all fake (WGAN: +1) images", then "all real (WGAN: -1) images"
+        labels_discriminator = tf.concat(
+            [tf.ones((batch_size, 1)), -tf.ones((batch_size, 1))], axis=0
+        )
+        # * Train Discriminator
         with tf.GradientTape() as tape:
-            predictions = self.discriminator(all_samples)
-            d_loss = self.loss_fn(all_samples_labels, predictions)
-            gp = self.gradient_penalty(
-                batch_size,
-                real_samples,  # logits of real samples
-                synthetic_concat_labels,  # logits of fake samples
+            predictions = self.discriminator(
+                tf.concat([combined_samples_without_labels, combined_labels], axis=1)
             )
-            d_loss += self.gp_weight * gp
+            d_loss = self.wasserstein_loss(labels_discriminator, predictions)
+            gradient_penalty = self.gradient_penalty(
+                batch_size, X_real, y_real, fake_samples_without_labels
+            )
+            d_loss += self.gp_weight * gradient_penalty
+
+        # * Update Discriminator
         grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
         self.d_optimizer.apply_gradients(
             zip(grads, self.discriminator.trainable_weights)
@@ -73,35 +79,48 @@ class WCGAN_GP(CGAN):
         return d_loss
 
     def train_G(self, batch_size: int, y_labels: np.array):
-        # & Generate fake data (train G)
-        random_latent_vectors_X = tf.random.normal(shape=(batch_size, self.latent_dim))
-        # * for CGAN, random_vector_labels will also have the one-hot encoded y labels concatenated.
-        #       note that this goes BEFORE the latent space is fed into the generator.
-        random_vector_labels = tf.concat([random_latent_vectors_X, y_labels], axis=1)
+        fake_labels = self.generate_fake_labels(batch_size)
+        # * Assemble labels that say "all real images" (WGAN: -1)
+        misleading_labels = -tf.ones((batch_size, 1))
 
-        # & Train Generator
-        # Assemble labels that say "all real (WGAN: -1) images", even though all samples here are fake.
-        misleading_labels = -1 * tf.ones((batch_size, 1))
         with tf.GradientTape() as tape:
-            generated_samples_X = self.generator(random_vector_labels)
-            sythetic_concat_labels = tf.concat((generated_samples_X, y_labels), axis=1)
-            predictions = self.discriminator(sythetic_concat_labels)
-            g_loss = self.loss_fn(misleading_labels, predictions)
+            fake_samples_without_labels = self.generate_fake_samples_without_labels(
+                batch_size, fake_labels
+            )
+            predictions = self.discriminator(
+                tf.concat([fake_samples_without_labels, fake_labels], axis=1)
+            )
+            g_loss = self.wasserstein_loss(misleading_labels, predictions)
+
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
         return g_loss
 
+    def generate_fake_samples_without_labels(self, n_samples, labels):
+        noise = tf.random.normal((n_samples, self.latent_dim))
+        input_data = tf.concat([noise, labels], axis=1)
+        fake_samples = self.generator(input_data)
+        return fake_samples
+
+    def generate_fake_labels(self, batch_size) -> tf.Tensor:
+        labels = tf.random.uniform(
+            (batch_size,), maxval=self.num_classes, dtype=tf.int32
+        )
+        labels = tf.cast(labels, tf.float32)
+        labels = tf.reshape(labels, (-1, 1))
+        return labels
+
     def train_step(self, real_samples):
         # & Unpack the real data.
-        # X_labels = real_samples[:, : -self.num_y_cols]  # first N cols
-        y_labels = real_samples[:, -self.num_y_cols :]  # last N cols
+        X_real = real_samples[:, : -self.num_y_cols]  # first N cols
+        y_real = real_samples[:, -self.num_y_cols :]  # last N cols
         batch_size = tf.shape(real_samples)[0]
 
         # * in WCGAN, update D more times than G
-        UPDATE_D_TIMES = 5
+        UPDATE_D_TIMES = 3
         for i in range(UPDATE_D_TIMES):
-            d_loss = self.train_D(real_samples, y_labels)
-        g_loss = self.train_G(batch_size, y_labels)
+            d_loss = self.train_D(X_real, y_real)
+        g_loss = self.train_G(batch_size, y_real)
 
         # & Update loss
         # ! Turn this off for now
@@ -157,12 +176,9 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         output_shape = self.X.shape[1]
         generator = keras.Sequential(
             [
-                keras.layers.BatchNormalization(),
-                keras.layers.Dense(80, activation="relu", input_shape=(input_shape,)),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
-                keras.layers.Dense(80, activation="relu"),
+                keras.layers.Dense(128, activation="relu", input_shape=(input_shape,)),
+                keras.layers.Dense(128, activation="relu"),
+                keras.layers.Dense(128, activation="relu"),
                 keras.layers.Dense(output_shape),  # number of features
                 final_layer,
             ],
@@ -175,31 +191,22 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         input_shape = self.X.shape[1] + self.y.shape[1]
         discriminator = keras.Sequential(
             [
-                keras.layers.BatchNormalization(),
+                # keras.layers.BatchNormalization(),
                 keras.layers.Dense(
-                    80,
+                    128,
                     activation="relu",
                     input_shape=(input_shape,),
                 ),
                 keras.layers.Dense(
-                    80,
+                    128,
                     activation="relu",
                 ),
                 keras.layers.Dense(
-                    80,
+                    128,
                     activation="relu",
                 ),
-                keras.layers.Dense(
-                    80,
-                    activation="relu",
-                ),
-                keras.layers.Dense(
-                    80,
-                    activation="relu",
-                ),
-                keras.layers.Dense(
-                    1, activation="linear"
-                ),  # for WGAN, it's linear, not sigmoid
+                # * for WGAN, it's linear, not sigmoid
+                keras.layers.Dense(1, activation="linear"),
             ],
             name="discriminator",
         )
@@ -210,34 +217,25 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         # * This is done by passing one-hot encoded labels.
         # * For the generic generate_samples() function,
         # *     we just generate random labels uniformly.
-        # TODO: In the future, generate_samples() should also be a parameter,
-        # TODO:     so we can specify how to generate the samples.
 
-        latent_space_samples = tf.random.normal(
-            (num_samples, self.latent_dim)
-        )  # (num_samples samples of noise, number of cols)
+        # * generate random noise for the generator
+        latent_space_samples = tf.random.normal((num_samples, self.latent_dim))
 
-        # * generate random labels.
+        # * generate random labels as a tensor
         num_classes = len(self.y_encoder.classes_)  # 2 for 2 classes
-        rand_labels = np.random.randint(
-            low=0, high=num_classes, size=(num_samples)
-        ).reshape(-1, 1)
-        # * one-hot encode random labels
-        enc = OneHotEncoder(
-            categories=[list(range(num_classes))],
-            dtype="float32",
-            sparse=False,
-            drop="if_binary",  # ~ this is needed to not generate 2 cols for 2 classes
-        ).fit(rand_labels)
-        one_hot_labels = tf.convert_to_tensor(enc.transform(rand_labels))
-        latent_and_labels = tf.concat((latent_space_samples, one_hot_labels), axis=1)
+        random_labels = tf.random.uniform(
+            (num_samples,), maxval=num_classes, dtype=tf.int32
+        )
+        random_labels = tf.cast(random_labels, tf.float32)
+        random_labels = tf.reshape(random_labels, (-1, 1))
+
+        latent_and_labels = tf.concat((latent_space_samples, random_labels), axis=1)
 
         # * since the generated samples only generates X, we need to concatenate the labels too.
         generated_samples_X = self.generator(latent_and_labels).numpy()  # G(noise)
-        generated_samples = np.hstack((generated_samples_X, one_hot_labels))
+        generated_samples = np.hstack((generated_samples_X, random_labels))
         return generated_samples
 
-    # implementation of wasserstein loss in Keras
     @staticmethod
     def wasserstein_loss(y_true, y_pred):
         return backend.mean(y_true * y_pred)
@@ -245,7 +243,9 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
     def compile_and_fit_GAN(self, d_learning_rate, g_learning_rate, beta_1, epochs):
         # beta_1 = 0.0  # according to the paper???
         # beta_2 = 0.9  # according to the paper???
-        beta_1 = 0.9  # default
+        # beta_1 = 0.9  # default
+        # beta_2 = 0.999  # default
+        beta_1 = 0.5  # works better
         beta_2 = 0.999  # default
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
@@ -254,7 +254,7 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
             g_optimizer=keras.optimizers.Adam(
                 learning_rate=g_learning_rate, beta_1=beta_1, beta_2=beta_2
             ),
-            loss_fn=self.wasserstein_loss,
+            loss_fn=self.wasserstein_loss,  # ! not used
         )
         self.history = self.gan.fit(
             self.dataset,
