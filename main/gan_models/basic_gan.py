@@ -474,7 +474,7 @@ class BasicGANPipeline(GenericPipeline):
         y_cols_len = self.get_y_cols_len()
 
         X, y = generated_samples[:, :-y_cols_len], generated_samples[:, -y_cols_len:]
-        return X, self.y_encoder.inverse_transform(y), self.y_encoder
+        return X, y.ravel(), self.y_encoder
 
     def get_y_cols_len(self) -> int:
         # for whatever reason, if there are only 2 classes,
