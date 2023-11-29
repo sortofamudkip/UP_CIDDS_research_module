@@ -260,23 +260,19 @@ def run_pipeline(
     # load test data
     logging.info("Loading test data...")
     X_test, y_test = load_testdata(test_data_pickle_fname, num_classes)
-    if debug:
-        # & Debug GAN
-        logging.debug(X_test.mean(axis=1))
-        logging.info("Using test X!!!")
-        logging.debug(y_test[:5])
-        unraveled_y = y_test.ravel()
-        X_test = X_test[:, :2]  # only take first two cols
-        X_test[unraveled_y == "attacker"] = 0.2 + np.random.uniform(
-            -0.01, 0.01, size=X_test[unraveled_y == "attacker"].shape
-        )
-        X_test[unraveled_y == "normal"] = 0.8 + np.random.uniform(
-            -0.01, 0.01, size=X_test[unraveled_y == "normal"].shape
-        )
-        # logging.debug("X_test mean:")
-        # logging.debug(X_test[unraveled_y == "normal"].mean(axis=1).mean())
-        # logging.debug("y_test mean:")
-        # logging.debug(X_test[unraveled_y == "attacker"].mean(axis=1).mean())
+    # if is_debug:
+    #     # Debug GAN
+    #     logging.debug(X_test.mean(axis=1))
+    #     logging.info("Using test X!!!")
+    #     logging.debug(y_test[:5])
+    #     unraveled_y = y_test.ravel()
+    #     X_test = X_test[:, :2]  # only take first two cols
+    #     X_test[unraveled_y == "attacker"] = 0.2 + np.random.uniform(
+    #         -0.01, 0.01, size=X_test[unraveled_y == "attacker"].shape
+    #     )
+    #     X_test[unraveled_y == "normal"] = 0.8 + np.random.uniform(
+    #         -0.01, 0.01, size=X_test[unraveled_y == "normal"].shape
+    #     )
 
     # generate and evaluate synthetic data
     logging.info("Evaluating synthetic data...")
