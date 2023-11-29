@@ -2,9 +2,14 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models
 from tensorflow.keras.optimizers import Adam
+from preprocessing_utils.general.postprocessing import (
+    postprocess_UDP_TCP_flags,
+)
 from hyperparams import DEFAULT_HYPERPARAMS_TO_TUNE, recursive_dict_union
 import logging
 import numpy as np
+from score_dataset import mask_plausible_rows
+from preprocess_data import decode_N_WGAN_GP
 
 
 class CIDDS_WCGAN_GP(tf.keras.Model):
@@ -14,6 +19,8 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         num_classes: int,
         x_col_labels: list,
         x_encoders: dict,
+        decoder_func: callable,  # e.g. decode_N_WGAN_GP
+        y_encoder,
         hyperparams_to_tune: dict,  # from get_hyperparams_to_tune() in hyperparams.py
     ):
         super(CIDDS_WCGAN_GP, self).__init__()
@@ -24,6 +31,8 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         self.gp_weight = 10.0  # ^ probably don't need to tune this
         self.x_col_labels = x_col_labels
         self.x_encoders = x_encoders
+        self.decoder_func = decoder_func
+        self.y_encoder = y_encoder
 
         # * Hyperarameters to tune (put this before creating G and D models)
         self.hyperparams_to_tune = recursive_dict_union(
@@ -68,8 +77,6 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         return bool_array
 
     def create_generator_final_layer(self, col_labels: list, y_col_num: int):
-        print("col_labels", col_labels)
-        print("y_col_num", y_col_num)
         sigmoid_indices = self.determine_generator_activations(col_labels, y_col_num)
         sigmoid_indices = tf.constant(sigmoid_indices, dtype=tf.int32)
         sigmoid_indices = tf.cast(sigmoid_indices, dtype=tf.bool)
@@ -166,6 +173,80 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         labels = tf.reshape(labels, (-1, 1))
         return labels
 
+    def decode_samples_to_human_format(
+        self,
+        generated_samples_X: np.array,
+        generated_samples_y: np.array,
+    ):
+        decoded_data = self.decoder_func(
+            generated_samples_X,
+            generated_samples_y,
+            self.y_encoder,
+            self.x_col_labels,
+            self.x_encoders,
+        )
+        # * TCP flags = ..... if UDP
+        postprocessed = postprocess_UDP_TCP_flags(decoded_data)
+        return postprocessed
+
+    def generate_n_plausible_samples(self, n_x_rows: int, n_target_rows: int):
+        """
+        Generates n_target_rows number of plausible samples using the GAN model.
+
+        Args:
+            n_target_rows (int): The number of plausible samples to generate.
+            n_x_rows (int): The number of rows in the original dataset (X).
+
+        Returns:
+            tuple: A tuple containing:
+                - numpy.ndarray: A 2D numpy array of shape (n_target_rows, n_features) containing the generated plausible samples.
+                - numpy.ndarray: A 1D numpy array of shape (n_iterations,) containing the retention scores for each iteration.
+        """
+        all_plausible_samples = []
+        cur_num_rows = 0
+        retention_scores = []
+
+        n_target_rows = int(n_target_rows)  # just in case it's a float
+
+        logging.info(f"Generating {n_target_rows} plausible samples...")
+        while cur_num_rows < n_target_rows:
+            # * generate samples and decode them to human format (pandas df)
+            random_labels = self.generate_fake_labels(n_x_rows)
+            samples_X = self.generate_fake_samples_without_labels(
+                n_x_rows, random_labels
+            ).numpy()
+            random_labels = random_labels.numpy()
+            samples_X_y = np.hstack((samples_X, random_labels))
+            samples_df = self.decode_samples_to_human_format(
+                samples_X,
+                random_labels,
+            )
+
+            # * filter out implausible rows
+            filtered_mask = mask_plausible_rows(samples_df, num_classes=2)
+            plausible_samples = samples_X_y[filtered_mask]
+            # * add to list of plausible samples
+            all_plausible_samples.append(plausible_samples)
+
+            # * update retention score
+            retention_score = plausible_samples.shape[0] / n_x_rows
+            retention_scores.append(retention_score)
+            cur_num_rows += plausible_samples.shape[0]
+
+            # * logging
+            logging.info(
+                f"Generated {plausible_samples.shape[0]} plausible samples (retention score: {retention_score:.2f})"
+            )
+            if retention_score <= 0.01:
+                print("Generated less than 0.01 plausible samples!")
+                logging.warning("Generated less than 0.01 plausible samples!")
+                # return a placeholder array filled with NaNs
+                return np.full((1, self.output_dim), np.nan)
+
+        retention_scores = np.array(retention_scores)
+
+        return np.vstack(all_plausible_samples)[:n_target_rows], retention_scores
+
     def train_step(self, real_samples_with_labels):
         # unpack data (which is just the entire dataset with labels in one big tensor)
         real_samples = real_samples_with_labels[:, : -self.num_y_cols]
@@ -178,6 +259,7 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
             fake_samples_without_labels = self.generate_fake_samples_without_labels(
                 batch_size, fake_labels
             )
+            # fake and real samples are concatenated together
             combined_samples_without_labels = tf.concat(
                 [fake_samples_without_labels, real_samples], axis=0
             )
@@ -206,8 +288,6 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         # Train the generator
         fake_labels = self.generate_fake_labels(batch_size)
         misleading_labels = -tf.ones((batch_size, 1))
-        # combined_labels = tf.concat([fake_labels, labels], axis=0)
-        # print(combined_labels.numpy())
 
         with tf.GradientTape() as tape:
             fake_samples_without_labels = self.generate_fake_samples_without_labels(
