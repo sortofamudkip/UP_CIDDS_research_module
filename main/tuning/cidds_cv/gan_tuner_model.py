@@ -7,6 +7,7 @@ from hyperparams import get_hyperparams_to_tune, DEFAULT_HYPERPARAMS_TO_TUNE
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score
 from typing import List, Dict
+from preprocess_data import decode_N_WGAN_GP
 
 
 class GANTunerModelCV(kt.HyperModel):
@@ -17,12 +18,14 @@ class GANTunerModelCV(kt.HyperModel):
         X_encoders: dict,
         y_encoder,
         X_colnames: list,
+        decoder_func: callable,  # e.g. decode_N_WGAN_GP
     ):
         self.output_dim = output_dim
         self.num_classes = num_classes
         self.X_encoders = X_encoders
         self.y_encoder = y_encoder
         self.X_colnames = X_colnames
+        self.decoder_func = decoder_func
 
     def build(self, hp: kt.HyperParameters):
         # define the gan model with the hyperparameters to tune
@@ -32,6 +35,8 @@ class GANTunerModelCV(kt.HyperModel):
             num_classes=self.num_classes,
             x_col_labels=self.X_colnames,
             x_encoders=self.X_encoders,
+            decoder_func=self.decoder_func,
+            y_encoder=self.y_encoder,
             hyperparams_to_tune=self.hyperparams_to_tune,
         )
         # compile the gan model
@@ -44,26 +49,28 @@ class GANTunerModelCV(kt.HyperModel):
         #   then the classifier is evaluated on real data.
         # ^ Create a dataset with the synthetic samples
         num_samples = X_test.shape[0]
-        ## + Generate random labels from unifrom distribution
-        y_fake: tf.Tensor = model.generate_fake_labels(num_samples)
-        ## + Generate synthetic samples
-        X_fake = model.generate_fake_samples_without_labels(num_samples, y_fake)
-        ## + Convert these two into numpy arrays
-        X_fake = X_fake.numpy()
-        y_fake = y_fake.numpy()
+        attacker_label = self.y_encoder.transform(["attacker"])[0][0]
+        ## + generate n plausible samples
+        X_y_fake, retention_scores = model.generate_n_plausible_samples(
+            n_x_rows=num_samples, n_target_rows=num_samples
+        )
+        X_fake = X_y_fake[:, :-1]
+        y_fake = X_y_fake[:, -1]
         ## & if X_fake contains NaNs, warn the user and return positive infinity
         if np.isnan(X_fake).any():
-            logging.warning("X_fake contains NaNs")
+            logging.warning(
+                "X_fake contains NaNs or generated too many implausible samples"
+            )
             return np.inf
         # ^ Train a classifier on the synthetic samples
-        clf = RandomForestClassifier(max_depth=2, random_state=0, n_estimators=11)
+        clf = RandomForestClassifier(random_state=0, n_estimators=11)
         clf.fit(X_fake, y_fake.ravel())
 
         # ^ Evaluate classifier on real data (X_test, y_test) to get TSTR score
         # predict on real test data
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, pos_label=attacker_label)
         logging.info(f"Accuracy: {acc}, F1: {f1}")
         return acc
 
@@ -93,7 +100,7 @@ class GANTunerModelCV(kt.HyperModel):
             model.fit(
                 real_dataset.batch(hp_batch_size),
                 epochs=hp_num_epochs,
-                verbose=1,
+                verbose=0,
                 callbacks=[StopTrainingOnNaNCallback()],
                 **kwargs,
             )
