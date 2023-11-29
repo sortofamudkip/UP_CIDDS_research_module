@@ -1,6 +1,9 @@
+from preprocess_data import decode_N_WGAN_GP
+
 from load_data import get_datasets_and_info
 from gan_tuner_model import GANTunerModelCV
-from hyperparams import get_hyperparams_to_tune
+
+# from hyperparams import get_hyperparams_to_tune
 import keras_tuner as kt
 import logging
 
@@ -23,6 +26,7 @@ hypermodel = GANTunerModelCV(
     X_encoders=X_encoders,
     y_encoder=y_encoder,
     X_colnames=X_colnames,
+    decoder_func=decode_N_WGAN_GP,
 )
 
 
@@ -31,10 +35,10 @@ tuner = kt.RandomSearch(
     hypermodel=hypermodel,
     # no objective because it's the return value of `HyperModel.fit()`;
     # if it doesn't work, try https://keras.io/guides/keras_tuner/getting_started/#custom-metric-as-the-objective
-    max_trials=2,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
+    max_trials=1,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
     executions_per_trial=1,  # * how many times to train a model with the same hps
     overwrite=True,  # * overwrite previous results
-    directory="hp_tuning_cidds_cv_dir",
+    directory="hp_tuning_cidds_cv_dir_test_n_plausible_samples",
     project_name="cidds_wcgan_gp",
 )
 
