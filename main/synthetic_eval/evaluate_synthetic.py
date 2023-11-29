@@ -20,6 +20,8 @@ def eval_synthetic_one_epoch(
     # plausibility_score = eval_plaus_score(gan_pipeline, synthetic_samples)
     # evaluate on linear and non-linear models
     X_train, y_train, y_encoder = decode_samples_to_np(gan_pipeline, synthetic_samples)
+    attacker_label = y_encoder.transform(["attacker"])[0][0]
+    y_test_transformed = y_encoder.transform(y_test).ravel()
     if len(np.unique(y_train)) == 1:
         logging.warning("y only has one unique label!")
         tstr_forest_f1, tstr_logreg_f1 = 0, 0
@@ -31,7 +33,7 @@ def eval_synthetic_one_epoch(
             y_predict_and_proba_logreg,
         ) = tstr_predict_forest_logreg(
             X_test,  # real X
-            y_test,  # real y
+            y_test_transformed,  # real y
             X_train,  # synthetic X
             y_train,  # synthetic y
             y_encoder,
@@ -43,19 +45,26 @@ def eval_synthetic_one_epoch(
         # evaluate models
         ## forest (i.e. nonlinear)
         tstr_forest_f1 = scoring.f1_stats_one_epoch(
-            y_test, y_predict_forest, num_classes
+            y_test_transformed,
+            y_predict_forest,
+            num_classes,
+            pos_label=attacker_label,
         )
         tstr_forest_roc_auc = (
-            scoring.roc_auc_one_epoch(y_test, y_proba_forest[:, 1])
+            scoring.roc_auc_one_epoch(
+                y_test_transformed, y_proba_forest[:, attacker_label]
+            )
             if num_classes == 2
             else -1
         )
         ## logreg (i.e. linear)
         tstr_logreg_f1 = scoring.f1_stats_one_epoch(
-            y_test, y_predict_logreg, num_classes
+            y_test_transformed, y_predict_logreg, num_classes, pos_label=attacker_label
         )
         tstr_logreg_roc_auc = (
-            scoring.roc_auc_one_epoch(y_test, y_proba_logreg[:, 1])
+            scoring.roc_auc_one_epoch(
+                y_test_transformed, y_proba_logreg[:, attacker_label]
+            )
             if num_classes == 2
             else -1
         )
@@ -80,8 +89,6 @@ def tstr_predict_forest_logreg(
     also_return_proba=False,
 ):
     logreg_solver = "newton-cg" if num_classes == 2 else "lbfgs"
-    print(f"y_train: {y_train}")
-    print(f"y_test: {y_test}")
     y_predict_forest = models.random_forest_train_predict(
         X_train,
         X_test,
