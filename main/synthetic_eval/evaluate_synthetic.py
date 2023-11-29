@@ -30,10 +30,10 @@ def eval_synthetic_one_epoch(
             y_predict_and_proba_forest,
             y_predict_and_proba_logreg,
         ) = tstr_predict_forest_logreg(
-            X_test,
-            y_test,
-            X_train,
-            y_train,
+            X_test,  # real X
+            y_test,  # real y
+            X_train,  # synthetic X
+            y_train,  # synthetic y
             y_encoder,
             num_classes=num_classes,
             also_return_proba=True,
@@ -80,6 +80,8 @@ def tstr_predict_forest_logreg(
     also_return_proba=False,
 ):
     logreg_solver = "newton-cg" if num_classes == 2 else "lbfgs"
+    print(f"y_train: {y_train}")
+    print(f"y_test: {y_test}")
     y_predict_forest = models.random_forest_train_predict(
         X_train,
         X_test,
