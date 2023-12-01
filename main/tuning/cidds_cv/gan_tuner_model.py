@@ -5,7 +5,7 @@ import numpy as np
 from gan import CIDDS_WCGAN_GP, StopTrainingOnNaNCallback
 from hyperparams import get_hyperparams_to_tune, DEFAULT_HYPERPARAMS_TO_TUNE
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from typing import List, Dict
 from preprocess_data import decode_N_WGAN_GP
 
@@ -43,7 +43,9 @@ class GANTunerModelCV(kt.HyperModel):
         model_gan.compile()
         return model_gan
 
-    def evaluate_TSTR(self, model: CIDDS_WCGAN_GP, X_test: np.array, y_test: np.array):
+    def evaluate_TSTR(
+        self, model: CIDDS_WCGAN_GP, X_test: np.array, y_test: np.array, fold: int
+    ):
         # TSTR: train synthetic, test real
         # The GAN produces synthetic samples which are then used to train a classifier,
         #   then the classifier is evaluated on real data.
@@ -69,10 +71,15 @@ class GANTunerModelCV(kt.HyperModel):
         # ^ Evaluate classifier on real data (X_test, y_test) to get TSTR score
         # predict on real test data
         y_pred = clf.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, pos_label=attacker_label)
-        logging.info(f"Accuracy: {acc}, F1: {f1}")
-        return acc
+
+        # get ROC AUC on real data
+        y_pred_proba = clf.predict_proba(X_test)
+        y_pred_proba_label_0 = y_pred_proba[:, attacker_label]
+        roc_auc = roc_auc_score(y_test, y_pred_proba_label_0)
+
+        logging.info(f"TSTR on fold {fold}: AUC: {roc_auc}, F1: {f1}")
+        return f1
 
     def fit(
         self,
@@ -105,7 +112,7 @@ class GANTunerModelCV(kt.HyperModel):
                 **kwargs,
             )
             # evaluate the gan model
-            tstr_score = self.evaluate_TSTR(model, X_test, y_test)
+            tstr_score = self.evaluate_TSTR(model, X_test, y_test, fold=i + 1)
             tstr_scores.append(tstr_score)
 
         # return the average TSTR score

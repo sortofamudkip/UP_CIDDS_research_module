@@ -24,7 +24,7 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         hyperparams_to_tune: dict,  # from get_hyperparams_to_tune() in hyperparams.py
     ):
         super(CIDDS_WCGAN_GP, self).__init__()
-        self.latent_dim = 100  # ! fixed for now
+        self.hp_latent_dim = -1  # * placeholder value
         self.output_dim = output_dim
         self.num_classes = num_classes
         self.num_y_cols = 1 if num_classes == 2 else num_classes
@@ -35,17 +35,18 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         self.y_encoder = y_encoder
 
         # * Hyperarameters to tune (put this before creating G and D models)
-        self.hyperparams_to_tune = recursive_dict_union(
-            DEFAULT_HYPERPARAMS_TO_TUNE, hyperparams_to_tune
-        )
+        self.hyperparams_to_tune = hyperparams_to_tune
+        self.hp_latent_dim = self.hyperparams_to_tune["latent_dim"]
 
         self.generator = self.build_generator()
         self.discriminator = self.build_discriminator()
 
         hp_g_learning_rate = self.hyperparams_to_tune["generator"]["learning_rate"]
         hp_d_learning_rate = self.hyperparams_to_tune["discriminator"]["learning_rate"]
-        self.g_optimizer = Adam(learning_rate=hp_g_learning_rate, beta_1=0.5)
-        self.d_optimizer = Adam(learning_rate=hp_d_learning_rate, beta_1=0.5)
+        hp_beta_1_g = self.hyperparams_to_tune["generator"]["beta_1"]
+        hp_beta_1_d = self.hyperparams_to_tune["discriminator"]["beta_1"]
+        self.g_optimizer = Adam(learning_rate=hp_g_learning_rate, beta_1=hp_beta_1_g)
+        self.d_optimizer = Adam(learning_rate=hp_d_learning_rate, beta_1=hp_beta_1_d)
 
         self.loss_fn = tf.keras.losses.BinaryCrossentropy()
 
@@ -120,6 +121,9 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         hp_hidden_layer_width = self.hyperparams_to_tune["generator"][
             "hidden_layer_width"
         ]
+        hp_hidden_layer_depth = self.hyperparams_to_tune["generator"][
+            "hidden_layer_depth"
+        ]
 
         # define the final activation function (specific to this dataset)
         ## * note: y_col_num=0 because CGAN only generates X, and y is specified before generating X
@@ -127,10 +131,12 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         # define the generator model
         model = models.Sequential()
         model.add(
-            layers.InputLayer(input_shape=(self.latent_dim + self.num_classes - 1,))
+            layers.InputLayer(input_shape=(self.hp_latent_dim + self.num_classes - 1,))
         )
         model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
         model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
+
+        # * consider these two final layers as one layer
         model.add(layers.Dense(self.output_dim, activation=None))
         model.add(final_layer)
         return model
@@ -139,6 +145,9 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         # define the hyperparameters to tune
         hp_hidden_layer_width = self.hyperparams_to_tune["discriminator"][
             "hidden_layer_width"
+        ]
+        hp_hidden_layer_depth = self.hyperparams_to_tune["discriminator"][
+            "hidden_layer_depth"
         ]
 
         model = models.Sequential()
@@ -155,9 +164,14 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         self.discriminator.compile(
             optimizer=self.d_optimizer, loss=self.wasserstein_loss, metrics=["accuracy"]
         )
+        logging.info("Compiled generator and discriminator models")
+        logging.info("Generator summary:")
+        self.generator.summary()
+        logging.info("Discriminator summary:")
+        self.discriminator.summary()
 
     def generate_fake_samples_without_labels(self, n_samples, labels):
-        noise = tf.random.normal((n_samples, self.latent_dim))
+        noise = tf.random.normal((n_samples, self.hp_latent_dim))
         input_data = tf.concat([noise, labels], axis=1)
         fake_samples = self.generator(input_data)
         return fake_samples
