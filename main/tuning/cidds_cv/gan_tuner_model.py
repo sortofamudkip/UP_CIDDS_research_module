@@ -79,7 +79,7 @@ class GANTunerModelCV(kt.HyperModel):
         roc_auc = roc_auc_score(y_test, y_pred_proba_label_0)
 
         logging.info(f"TSTR on fold {fold}: AUC: {roc_auc}, F1: {f1}")
-        return f1
+        return -roc_auc  # * negative because kt maximizes the objective
 
     def fit(
         self,
