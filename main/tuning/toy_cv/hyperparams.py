@@ -44,4 +44,5 @@ def get_hyperparams_to_tune(hp: kt.HyperParameters):
         "num_epochs": hp.Int("num_epochs", min_value=10, max_value=100, step=30),
         "batch_size": hp.Int("batch_size", min_value=128, max_value=256, step=64),
     }
-    return hyperparams_to_tune
+    all_hps = recursive_dict_union(DEFAULT_HYPERPARAMS_TO_TUNE, hyperparams_to_tune)
+    return all_hps
