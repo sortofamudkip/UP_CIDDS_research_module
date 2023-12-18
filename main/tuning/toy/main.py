@@ -5,9 +5,15 @@ from gan_tuner_model import GANTunerModel
 from hyperparams import get_hyperparams_to_tune
 import keras_tuner as kt
 import logging
+import random
 
 logging.basicConfig(level=logging.DEBUG)
 
+# create a random token of length 5
+random_token = "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=5))
+project_dir = f"hp_tuning_dir_{random_token}"
+project_name = f"toy_wcgan_gp_{random_token}"
+logging.info(f"random_token: {random_token}")
 
 # get train and test datasets
 train_dataset = get_train_dataset()
@@ -28,11 +34,11 @@ tuner = kt.RandomSearch(
     hypermodel=hypermodel,
     # no objective because it's the return value of `HyperModel.fit()`;
     # if it doesn't work, try https://keras.io/guides/keras_tuner/getting_started/#custom-metric-as-the-objective
-    max_trials=5,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
+    max_trials=2,  # ! max amount of hyperparameter combinations to try; INCREASE THIS LATER
     executions_per_trial=1,  # * how many times to train a model with the same hps
     overwrite=True,  # * overwrite previous results
-    directory="hp_tuning_toy_dir",
-    project_name="toy_wcgan_gp",
+    directory=project_dir,
+    project_name=project_name,
 )
 
 tuner.search(
