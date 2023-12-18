@@ -53,9 +53,15 @@ class GANTunerModelCV(kt.HyperModel):
         num_samples = X_test.shape[0]
         attacker_label = self.y_encoder.transform(["attacker"])[0][0]
         ## + generate n plausible samples
-        X_y_fake, retention_scores = model.generate_n_plausible_samples(
-            n_x_rows=num_samples, n_target_rows=num_samples
-        )
+        try:
+            X_y_fake, retention_scores = model.generate_n_plausible_samples(
+                n_x_rows=num_samples, n_target_rows=num_samples
+            )
+        except ValueError:
+            logging.warning(
+                "Generated too many implausible samples, returning positive infinity"
+            )
+            return np.inf
         X_fake = X_y_fake[:, :-1]
         y_fake = X_y_fake[:, -1]
         ## & if X_fake contains NaNs, warn the user and return positive infinity
