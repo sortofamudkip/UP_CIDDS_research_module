@@ -216,6 +216,30 @@ class BasicGANPipeline(GenericPipeline):
 
         return FinalActivation()
 
+    def postprocess_generated_samples(self, generated_data_without_y: np.array):
+        # get dataframe version of generated data
+        generated_data_without_y_df = pd.DataFrame(generated_data_without_y, columns=self.X_colnames, dtype=np.float32)
+        # print(f"before postprocessing: {list(zip(self.X_colnames, generated_data_without_y_df.head(1).values[0]))}")
+
+        protocol_colnames = ['is_ICMP', 'is_TCP', 'is_UDP']
+        tcp_colnames = ['is_URG','is_ACK','is_PSH','is_RES','is_SYN','is_FIN']
+        day_colnames = ["is_Monday", "is_Tuesday", "is_Wednesday", "is_Thursday", "is_Friday", "is_Saturday", "is_Sunday"]
+
+        generated_data_without_y_df[protocol_colnames] = generated_data_without_y_df[protocol_colnames].apply(lambda row: row == row.max(), axis=1).astype(int)
+        generated_data_without_y_df[day_colnames] = generated_data_without_y_df[day_colnames].apply(lambda row: row == row.max(), axis=1).astype(int)
+        # * for tcp_colnames, round to 0 or 1
+        generated_data_without_y_df[tcp_colnames] = generated_data_without_y_df[tcp_colnames].round()
+
+
+        # get list of columns that start with 0b
+        binary_colnames = [colname for colname in self.X_colnames if colname.startswith("0b")]
+        # for colnames that start with 0b, round to 0 or 1
+        generated_data_without_y_df[binary_colnames] = generated_data_without_y_df[binary_colnames].round()
+        # return numpy version of generated data
+        # print(f"after postprocessing: {list(zip(self.X_colnames, generated_data_without_y_df.head(1).values[0]))}")
+        return generated_data_without_y_df.values.astype(np.float32)
+
+
     def load_data(self, filename: str, use_balanced_dataset: bool):
         ################################
         #    Loading data from file    #
@@ -233,6 +257,11 @@ class BasicGANPipeline(GenericPipeline):
             self.all_col_labels = self.X_colnames + self.y_colnames
             self.X_encoders = X_encoders
             self.y_encoder = y_encoder
+        # replace X_encoders with "X_encoders" from filename's directory
+        X_encoders_fname = Path(filename).parent / "X_encoders"
+        with open(X_encoders_fname, "rb") as f:
+            self.X_encoders = pickle.load(f)
+            logging.info(f"Loaded X_encoders from {X_encoders_fname}.")
 
         full_dataset = np.hstack([X, y]).astype(np.float32)
 

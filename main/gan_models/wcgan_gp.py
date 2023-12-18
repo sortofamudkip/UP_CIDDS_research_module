@@ -201,10 +201,6 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
                     128,
                     activation="relu",
                 ),
-                keras.layers.Dense(
-                    128,
-                    activation="relu",
-                ),
                 # * for WGAN, it's linear, not sigmoid
                 keras.layers.Dense(1, activation="linear"),
             ],
@@ -231,9 +227,17 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
 
         latent_and_labels = tf.concat((latent_space_samples, random_labels), axis=1)
 
-        # * since the generated samples only generates X, we need to concatenate the labels too.
+        # * generate samples using the generator
         generated_samples_X = self.generator(latent_and_labels).numpy()  # G(noise)
+        # * postprocess the generated samples
+        # ** For labels with binary outputs, round them to 0 or 1
+        generated_samples_X = self.postprocess_generated_samples(generated_samples_X)
+
+        # * since the generated samples only generates X, we need to concatenate the labels too.
         generated_samples = np.hstack((generated_samples_X, random_labels))
+
+
+
         return generated_samples
 
     @staticmethod
@@ -245,14 +249,14 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         # beta_2 = 0.9  # according to the paper???
         # beta_1 = 0.9  # default
         # beta_2 = 0.999  # default
-        beta_1 = 0.5  # works better
+        # beta_1 = 0.5  # works better
         beta_2 = 0.999  # default
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
-                learning_rate=d_learning_rate, beta_1=beta_1, beta_2=beta_2
+                learning_rate=d_learning_rate, beta_1=0.9, beta_2=beta_2
             ),
             g_optimizer=keras.optimizers.Adam(
-                learning_rate=g_learning_rate, beta_1=beta_1, beta_2=beta_2
+                learning_rate=g_learning_rate, beta_1=0.5, beta_2=beta_2
             ),
             loss_fn=self.wasserstein_loss,  # ! not used
         )
