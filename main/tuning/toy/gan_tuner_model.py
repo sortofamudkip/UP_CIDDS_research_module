@@ -49,7 +49,10 @@ class GANTunerModel(kt.HyperModel):
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred)
+        logging.info(f"-----Results-----")
+        logging.info(f"Hyperparams: {self.hyperparams_to_tune}")
         logging.info(f"Accuracy: {acc}, F1: {f1}")
+        logging.info(f"-----------------")
         return acc
 
     def fit(
