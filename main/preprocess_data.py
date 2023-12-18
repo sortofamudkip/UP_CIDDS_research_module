@@ -269,14 +269,23 @@ def get_B_WGAN_GP_preprocessed_data(
         else []
     )
     subset = data.drop(to_drop_indices)
+
+    logging.debug("Processing cols: Duration...")
     dur_scaler, dur_scaled = scale_min_max(subset["Duration"])
+    logging.debug("Processing cols: Proto...")
     enc_proto, onehotencoded_proto, proto_labels = one_hot_encode_Proto(subset["Proto"])
+    logging.debug("Processing cols: SrcPt...")
     source_ports_binary = _int_to_binary_cols(subset["SrcPt"], 16)
+    logging.debug("Processing cols: DstPt...")
     dest_ports_binary = _int_to_binary_cols(subset["DstPt"], 16)
+    logging.debug("Processing cols: Bytes...")
     bytes_binary = _int_to_binary_cols(subset["Bytes"], 32)
+    logging.debug("Processing cols: Packets...")
     packets_binary = _int_to_binary_cols(subset["Packets"], 32)
+    logging.debug("Processing cols: Flags...")
     onehotencoded_flags, flags_labels = one_hot_encode_TCP_Flags(subset["Flags"])
 
+    logging.debug("Assembling full_X...")
     full_X = np.hstack(
         [
             dur_scaled,
@@ -288,7 +297,9 @@ def get_B_WGAN_GP_preprocessed_data(
             onehotencoded_flags,
         ]
     )
+    logging.debug("Processing col: class...")
     y, y_encoder = _encode_y(subset["class"].to_numpy())
+    logging.debug("Assembling x_labels and x_encoders...")
     x_labels = (
         ["Duration"]
         + proto_labels
@@ -304,8 +315,10 @@ def get_B_WGAN_GP_preprocessed_data(
     }
 
     if include_date_ip:  # when including date and ip, fetch their columns as well
+        logging.debug("Processing cols: SrcIP and DstIP...")
         src_ips = _process_B_WGAN_GP_ips(subset["SrcIP"])
         dest_ips = _process_B_WGAN_GP_ips(subset["DstIP"])
+        logging.debug("Processing col: Date_first_seen...")
         (
             enc_date_first_seen,
             onehotencoded_days_of_week,
@@ -323,4 +336,5 @@ def get_B_WGAN_GP_preprocessed_data(
         )
         x_encoders["Date_first_seen"] = enc_date_first_seen
 
+    logging.info("Finished preprocessing data using B_WGAN_GP method.")
     return full_X, y, y_encoder, x_labels, x_encoders
