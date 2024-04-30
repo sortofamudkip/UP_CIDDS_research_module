@@ -52,7 +52,7 @@ def eval_synthetic_one_epoch(
         )
         tstr_forest_roc_auc = (
             scoring.roc_auc_one_epoch(
-                y_test_transformed, y_proba_forest[:, attacker_label]
+                y_test_transformed, y_proba_forest[:, 1]
             )
             if num_classes == 2
             else -1
@@ -63,7 +63,7 @@ def eval_synthetic_one_epoch(
         )
         tstr_logreg_roc_auc = (
             scoring.roc_auc_one_epoch(
-                y_test_transformed, y_proba_logreg[:, attacker_label]
+                y_test_transformed, y_proba_logreg[:, 1]
             )
             if num_classes == 2
             else -1

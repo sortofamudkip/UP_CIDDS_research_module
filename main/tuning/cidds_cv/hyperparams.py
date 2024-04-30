@@ -36,35 +36,43 @@ def get_hyperparams_to_tune(hp: kt.HyperParameters):
     hyperparams_to_tune = {
         "discriminator": {
             "hidden_layer_width": hp.Int(
-                "hidden_layer_width", min_value=128, max_value=128 * 5, step=128
+                "d_hidden_layer_width", min_value=256, max_value=128 * 4, step=128
             ),
             "learning_rate": hp.Choice(
-                "learning_rate", values=[3e-4, 8e-4, 3e-5, 8e-5, 3e-6]
+                "d_learning_rate", values=[3e-4, 8e-4, 3e-5, 8e-5, 3e-6]
             ),
             "hidden_layer_depth": hp.Int(
-                "hidden_layer_depth", min_value=3, max_value=10, step=2
+                "d_hidden_layer_depth", min_value=3, max_value=10, step=2
             ),
-            "beta_1": hp.Choice("beta_1", values=[0.0, 0.5, 0.9]),
+            "beta_1": hp.Choice("d_beta_1", values=[0.0, 0.5, 0.9]),
         },
         "generator": {
             "hidden_layer_width": hp.Int(
-                "hidden_layer_width", min_value=128, max_value=128 * 3, step=128
+                "g_hidden_layer_width", min_value=256, max_value=128 * 4, step=128
             ),
             "learning_rate": hp.Choice(
-                "learning_rate", values=[1e-4, 5e-4, 1e-5, 5e-5, 1e-6]
+                "g_learning_rate", values=[1e-4, 5e-4, 1e-5, 5e-5, 1e-6]
             ),
             "hidden_layer_depth": hp.Int(
-                "hidden_layer_depth", min_value=3, max_value=10, step=2
+                "g_hidden_layer_depth", min_value=3, max_value=10, step=2
             ),
-            "beta_1": hp.Choice("beta_1", values=[0.0, 0.5, 0.9]),
+            "beta_1": hp.Choice("g_beta_1", values=[0.0, 0.5, 0.9]),
         },
         "num_epochs": hp.Int(
-            "num_epochs", min_value=10, max_value=20, step=5
+            "num_epochs", min_value=100, max_value=500, step=50
         ),  # ! change when done debugging
         "batch_size": hp.Choice(
-            "batch_size", values=[128, 256, 1024, 4096, 8192, 16384]
+            "batch_size", values=[128, 256, 1024, 4096, 8192, 16384, 32768]
         ),
-        "latent_dim": hp.Int("latent_dim", min_value=100, max_value=300, step=50),
+        "latent_dim": hp.Choice(
+            "batch_size", values=[256, 512]
+        ),
     }
     all_hps = recursive_dict_union(DEFAULT_HYPERPARAMS_TO_TUNE, hyperparams_to_tune)
     return all_hps
+
+if __name__ == "__main__":
+    hp = kt.HyperParameters()
+    # get a random set of hyperparameters to tune
+    all_hps = get_hyperparams_to_tune(hp)
+    print(all_hps)

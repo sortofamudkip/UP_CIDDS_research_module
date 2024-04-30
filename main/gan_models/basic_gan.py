@@ -123,7 +123,6 @@ class BasicGANPipeline(GenericPipeline):
     """A basic GAN that only generates unlabled flows (NOT labeled).
     Typical usage: basic_gan_pipeline = BasicGANPipeline(), then basic_gan_pipeline.compile_and_fit_GAN()
     """
-
     def __init__(
         self,
         dataset_filename: str,  # real dataset filename
@@ -133,6 +132,19 @@ class BasicGANPipeline(GenericPipeline):
         batch_size: int = 128,
         latent_dim: int = 0,
         use_balanced_dataset: bool = False,  # whether to balance the dataset or not
+        d_hidden_layer_width: int = 128,
+        d_hidden_layer_depth: int = 5,
+        g_hidden_layer_width: int = 128,
+        g_hidden_layer_depth: int = 5,
+        # load using compressed data
+        is_load_compressed_data: bool = False,
+        compressed_X: np.array = None,
+        compressed_y: np.array = None,
+        compressed_X_colnames: list = None,
+        compressed_X_encoders: dict = None,
+        compressed_y_encoder = None,
+        # # * param if no IP
+        # is_no_IP: bool = False,
     ) -> None:
         super().__init__()
         self.subset = subset
@@ -142,6 +154,23 @@ class BasicGANPipeline(GenericPipeline):
         self.pipeline_name = pipeline_name
         self.use_balanced_dataset = use_balanced_dataset
         self.shuffle_size = 16384
+
+        # ! these aren't used yet in basic_gan, but are usede in wcgan_gp
+        self.d_hidden_layer_width = d_hidden_layer_width
+        self.d_hidden_layer_depth = d_hidden_layer_depth
+        self.g_hidden_layer_width = g_hidden_layer_width
+        self.g_hidden_layer_depth = g_hidden_layer_depth
+
+        # * for compressed data
+        self.is_load_compressed_data = is_load_compressed_data
+        self.compressed_X = compressed_X
+        self.compressed_y = compressed_y
+        self.compressed_X_colnames = compressed_X_colnames
+        self.compressed_X_encoders = compressed_X_encoders
+        self.compressed_y_encoder = compressed_y_encoder
+
+        # # * for no IP
+        # self.is_no_IP = is_no_IP
 
         # these are to be filled out by self.load_data
         self.X = None  # * original (real) X, NOT synthetic
@@ -153,7 +182,14 @@ class BasicGANPipeline(GenericPipeline):
         self.y_encoder = None
         train_loader, num_cols = self.load_data(
             dataset_filename, self.use_balanced_dataset
-        )
+        ) if not is_load_compressed_data else self.load_data_from_compressed_file(
+            self.compressed_X, self.compressed_y, self.compressed_X_colnames, self.compressed_X_encoders, self.compressed_y_encoder, self.use_balanced_dataset
+            )
+        
+        # log shapes of X and X_colnames
+        logging.info(f"🟠self.X.shape: {self.X.shape}")
+        logging.info(f"🟠self.X_colnames shape: {len(self.X_colnames)}")
+
         self.y_cols_len = self.get_y_cols_len()
         # ^ if latent_dim is not defined, set it to num_cols.
         self.latent_dim = latent_dim if latent_dim != 0 else num_cols
@@ -213,6 +249,18 @@ class BasicGANPipeline(GenericPipeline):
                     tf.keras.activations.sigmoid(inputs),
                     tf.keras.activations.relu(inputs),
                 )
+            
+            def get_config(self):
+                base_config = super().get_config()
+                config = {}
+                return {**base_config, **config}
+            
+            @classmethod
+            def from_config(cls, config):
+                sublayer_config = config.pop("sublayer")
+                sublayer = keras.saving.deserialize_keras_object(sublayer_config)
+                return cls(sublayer, **config)
+
 
         return FinalActivation()
 
@@ -246,6 +294,22 @@ class BasicGANPipeline(GenericPipeline):
         ################################
         with open(filename, "rb") as f:
             X, y, y_encoder, X_colnames, X_encoders = pickle.load(f)
+
+            # * for no IP
+            if self.is_no_IP:
+                logging.info("Removing IP columns from X and X_colnames...")
+                # get the indices of all elements starting with "dstIP" and "srcIP"
+                dstIP_indices = [
+                    i for i in range(len(X_colnames)) 
+                    if (
+                        ("dstip" in X_colnames[i].lower())
+                        or ("srcip" in X_colnames[i].lower())
+                    )
+                ]
+                # drop all columns in X and X_labels with indices in ip_indices
+                X = np.delete(X, dstIP_indices, axis=1)
+                X_colnames = np.delete(X_colnames, dstIP_indices, axis=0)
+
             self.X = X
             self.y = y
             self.X_colnames = X_colnames
@@ -257,6 +321,12 @@ class BasicGANPipeline(GenericPipeline):
             self.all_col_labels = self.X_colnames + self.y_colnames
             self.X_encoders = X_encoders
             self.y_encoder = y_encoder
+        # replace X_encoders with "X_encoders" from filename's directory
+        X_encoders_fname = Path(filename).parent / "X_encoders"
+        with open(X_encoders_fname, "rb") as f:
+            self.X_encoders = pickle.load(f)
+            logging.info(f"Loaded X_encoders from {X_encoders_fname}.")
+
         # replace X_encoders with "X_encoders" from filename's directory
         X_encoders_fname = Path(filename).parent / "X_encoders"
         with open(X_encoders_fname, "rb") as f:
@@ -302,14 +372,68 @@ class BasicGANPipeline(GenericPipeline):
         # split into real and fake
         normal_samples = dataset_np[raveled_y == 1, :]  # 1 is normal
         attacker_samples = dataset_np[raveled_y == 0, :]  # 0 is attacker
+        # upsample attacker samples
+        num_normal_samples = normal_samples.shape[0]
+        num_attacker_samples = attacker_samples.shape[0]
+        num_normal_to_attacker_ratio = int(num_normal_samples / num_attacker_samples)
+        
         # turn into td.data.Dataset
         normal_dataset = tf.data.Dataset.from_tensor_slices(normal_samples)
-        attacker_dataset = tf.data.Dataset.from_tensor_slices(attacker_samples)
+        attacker_dataset = tf.data.Dataset.from_tensor_slices(attacker_samples.repeat(num_normal_to_attacker_ratio, axis=0))
         # use tf.data.Dataset.sample_from_datasets to sample from both datasets
         dataset = tf.data.Dataset.sample_from_datasets(
             [normal_dataset, attacker_dataset], [0.5, 0.5]
         )
         return dataset
+
+
+    def load_data_from_compressed_file(
+        self,
+        compressed_X : np.array, 
+        compressed_y : np.array, 
+        compressed_X_colnames : list, 
+        compressed_X_encoders : dict, 
+        compressed_y_encoder, 
+        use_balanced_dataset: bool,
+    ):
+        
+        # # * for no IP
+        # if self.is_no_IP:
+        #     logging.info("Removing IP columns from X and X_colnames...")
+        #     # get the indices of all elements starting with "dstIP" and "srcIP"
+        #     dstIP_indices = [
+        #         i for i in range(len(compressed_X_colnames)) 
+        #         if (
+        #             ("dstip" in compressed_X_colnames[i].lower())
+        #             or ("srcip" in compressed_X_colnames[i].lower())
+        #         )
+        #     ]
+        #     # drop all columns in X and X_labels with indices in ip_indices
+        #     compressed_X = np.delete(compressed_X, dstIP_indices, axis=1)
+        #     compressed_X_colnames = np.delete(compressed_X_colnames, dstIP_indices, axis=0)
+
+        self.X = compressed_X
+        self.y = compressed_y
+        self.X_colnames = list(compressed_X_colnames)
+        self.y_colnames = list(  # if y is binary labels, y.shape[1] == 1
+                [f"y_is_{c}" for c in compressed_y_encoder.classes_]
+                if len(compressed_y_encoder.classes_) != 2
+                else ["y"]
+            )
+
+        self.all_col_labels = self.X_colnames + self.y_colnames
+        logging.info(f"🟠self.all_col_labels: {self.all_col_labels}")
+        self.X_encoders = compressed_X_encoders
+        logging.info(f"🟠self.X_encoders: {self.X_encoders}")
+        self.y_encoder = compressed_y_encoder
+        logging.info(f"🟠self.y_encoder: {self.y_encoder}")
+        # * create train dataset
+        X_y_train = np.hstack([self.X, self.y]).astype(np.float32)
+        logging.info(f"🟠X_y_train.shape: {X_y_train.shape}")
+        # Create a TensorFlow Dataset for training data
+        train_dataset = self.get_balanced_dataset(X_y_train) if use_balanced_dataset else self.get_unbalanced_dataset(X_y_train)
+        train_dataset = train_dataset.shuffle(buffer_size=self.shuffle_size).batch(self.batch_size)
+        return train_dataset, self.X.shape[1]
 
     def get_unbalanced_dataset(self, dataset_np: np.array) -> tf.data.Dataset:
         """
@@ -333,11 +457,8 @@ class BasicGANPipeline(GenericPipeline):
                 keras.layers.Dense(
                     256, activation="relu", input_shape=(self.num_cols,)
                 ),
-                keras.layers.Dropout(0.15),
                 keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dropout(0.15),
                 keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dropout(0.15),
                 keras.layers.Dense(1, activation="sigmoid"),  # is real or fake
             ],
             name="discriminator",
@@ -369,16 +490,39 @@ class BasicGANPipeline(GenericPipeline):
             generator=self.generator,
             latent_dim=self.latent_dim,
         )
+    
+    def postprocess_generated_samples(self, generated_data_without_y: np.array):
+        # get dataframe version of generated data
+        generated_data_without_y_df = pd.DataFrame(generated_data_without_y, columns=self.X_colnames, dtype=np.float32)
+        # print(f"before postprocessing: {list(zip(self.X_colnames, generated_data_without_y_df.head(1).values[0]))}")
+
+        protocol_colnames = ['is_ICMP', 'is_TCP', 'is_UDP']
+        tcp_colnames = ['is_URG','is_ACK','is_PSH','is_RES','is_SYN','is_FIN']
+        day_colnames = ["is_Monday", "is_Tuesday", "is_Wednesday", "is_Thursday", "is_Friday", "is_Saturday", "is_Sunday"]
+
+        generated_data_without_y_df[protocol_colnames] = generated_data_without_y_df[protocol_colnames].apply(lambda row: row == row.max(), axis=1).astype(int)
+        generated_data_without_y_df[day_colnames] = generated_data_without_y_df[day_colnames].apply(lambda row: row == row.max(), axis=1).astype(int)
+        # * for tcp_colnames, round to 0 or 1
+        generated_data_without_y_df[tcp_colnames] = generated_data_without_y_df[tcp_colnames].round()
+
+
+        # get list of columns that start with 0b
+        binary_colnames = [colname for colname in self.X_colnames if colname.startswith("0b")]
+        # for colnames that start with 0b, round to 0 or 1
+        generated_data_without_y_df[binary_colnames] = generated_data_without_y_df[binary_colnames].round()
+        # return numpy version of generated data
+        # print(f"after postprocessing: {list(zip(self.X_colnames, generated_data_without_y_df.head(1).values[0]))}")
+        return generated_data_without_y_df.values.astype(np.float32)
 
     def compile_and_fit_GAN(
-        self, d_learning_rate: float, g_learning_rate: float, beta_1: float, epochs: int
+        self, d_learning_rate: float, g_learning_rate: float, d_beta_1: float, g_beta_1:float, epochs: int
     ):
         self.gan.compile(
             d_optimizer=keras.optimizers.Adam(
-                learning_rate=d_learning_rate, beta_1=beta_1
+                learning_rate=d_learning_rate, beta_1=d_beta_1
             ),
             g_optimizer=keras.optimizers.Adam(
-                learning_rate=g_learning_rate, beta_1=beta_1
+                learning_rate=g_learning_rate, beta_1=g_beta_1
             ),
             loss_fn=keras.losses.BinaryCrossentropy(),
             # custom_metrics=[self.domain_knowledge_score],
@@ -397,7 +541,7 @@ class BasicGANPipeline(GenericPipeline):
             #         pipeline_name=self.pipeline_name,
             #     ),
             # ],
-            verbose=1,
+            verbose=2,
         )
         return self.history
 

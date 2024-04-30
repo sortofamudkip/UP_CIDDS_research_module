@@ -64,12 +64,12 @@ class GANTunerModelCV(kt.HyperModel):
             return np.inf
         X_fake = X_y_fake[:, :-1]
         y_fake = X_y_fake[:, -1]
-        ## & if X_fake contains NaNs, warn the user and return positive infinity
+        ## & if X_fake contains NaNs, warn the user and return NaN
         if np.isnan(X_fake).any():
             logging.warning(
                 "X_fake contains NaNs or generated too many implausible samples"
             )
-            return np.inf
+            return np.nan
         # ^ Train a classifier on the synthetic samples
         clf = RandomForestClassifier(random_state=0, n_estimators=11)
         clf.fit(X_fake, y_fake.ravel())
@@ -85,7 +85,7 @@ class GANTunerModelCV(kt.HyperModel):
         roc_auc = roc_auc_score(y_test, y_pred_proba_label_0)
 
         logging.info(f"TSTR on fold {fold}: AUC: {roc_auc}, F1: {f1}")
-        return -roc_auc  # * negative because kt maximizes the objective
+        return roc_auc  # ! don't negate here!
 
     def fit(
         self,

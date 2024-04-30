@@ -138,20 +138,50 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         dataset_filename: str,
         decoding_func,
         pipeline_name: str,
-        subset=0.25,
+        subset=False,
         batch_size: int = 128,
         latent_dim: int = 32,
         use_balanced_dataset: bool = True,
+        # * new params
+        d_hidden_layer_width: int = 128,
+        d_hidden_layer_depth: int = 5,
+        g_hidden_layer_width: int = 128,
+        g_hidden_layer_depth: int = 5,
+        # * for compressed data
+        is_load_compressed_data: bool = False,
+        compressed_X: np.array = None,
+        compressed_y: np.array = None,
+        compressed_X_colnames: list = None,
+        compressed_X_encoders: dict = None,
+        compressed_y_encoder = None,
+        # # * no ip
+        # is_no_IP: bool = False,
     ) -> None:
         super().__init__(
-            dataset_filename,
-            decoding_func,
-            pipeline_name,
-            subset,
-            batch_size,
-            latent_dim,
-            use_balanced_dataset,
+            dataset_filename=dataset_filename,
+            decoding_func=decoding_func,
+            pipeline_name=pipeline_name,
+            subset=subset,
+            batch_size=batch_size,
+            latent_dim=latent_dim,
+            use_balanced_dataset=use_balanced_dataset,
+            d_hidden_layer_width=d_hidden_layer_width,
+            d_hidden_layer_depth=d_hidden_layer_depth,
+            g_hidden_layer_width=g_hidden_layer_width,
+            g_hidden_layer_depth=g_hidden_layer_depth,
+            is_load_compressed_data=is_load_compressed_data,
+            compressed_X=compressed_X,
+            compressed_y=compressed_y,
+            compressed_X_colnames=compressed_X_colnames,
+            compressed_X_encoders=compressed_X_encoders,
+            compressed_y_encoder=compressed_y_encoder,
+            # is_no_IP=is_no_IP,
         )
+        self.d_hidden_layer_width = d_hidden_layer_width
+        self.d_hidden_layer_depth = d_hidden_layer_depth
+        self.g_hidden_layer_width = g_hidden_layer_width
+        self.g_hidden_layer_depth = g_hidden_layer_depth
+
 
     def get_GAN(self):
         return WCGAN_GP(
@@ -174,39 +204,34 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         input_shape = self.latent_dim + self.y_cols_len
         # * the output is just to simulate X, since CGANS already know Y.
         output_shape = self.X.shape[1]
-        generator = keras.Sequential(
-            [
-                keras.layers.Dense(128, activation="relu", input_shape=(input_shape,)),
-                keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dense(output_shape),  # number of features
-                final_layer,
-            ],
-            name="generator",
+
+        model = keras.models.Sequential()
+        model.add(
+            keras.layers.InputLayer(input_shape=(input_shape,))
         )
-        return generator
+        for _ in range(self.g_hidden_layer_depth):
+            model.add(keras.layers.Dense(self.g_hidden_layer_width, activation="relu", kernel_initializer='glorot_uniform'))
+
+        # * consider these two final layers as one layer
+        model.add(keras.layers.Dense(output_shape, activation=None))
+        model.add(final_layer)
+        model.summary(print_fn=logging.info)
+        return model
 
     def get_discriminator(self):
         logging.info("Using WCGAN-GP Discriminator (Critic).")
         input_shape = self.X.shape[1] + self.y.shape[1]
-        discriminator = keras.Sequential(
-            [
-                # keras.layers.BatchNormalization(),
-                keras.layers.Dense(
-                    128,
-                    activation="relu",
-                    input_shape=(input_shape,),
-                ),
-                keras.layers.Dense(
-                    128,
-                    activation="relu",
-                ),
-                # * for WGAN, it's linear, not sigmoid
-                keras.layers.Dense(1, activation="linear"),
-            ],
-            name="discriminator",
+
+        model = keras.models.Sequential(name="discriminator")
+        model.add(
+            keras.layers.InputLayer(input_shape=(input_shape,))
         )
-        return discriminator
+        for _ in range(self.d_hidden_layer_depth):
+            model.add(keras.layers.Dense(self.d_hidden_layer_width, activation="relu", kernel_initializer='glorot_uniform'))
+
+        model.add(keras.layers.Dense(1, activation=None))  # linear because wasserstein loss
+        model.summary(print_fn=logging.info)
+        return model
 
     def generate_samples(self, num_samples: int, **kwargs):
         # * For CGANs, you also need to condition the input.
@@ -239,12 +264,11 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
 
 
         return generated_samples
-
     @staticmethod
     def wasserstein_loss(y_true, y_pred):
         return backend.mean(y_true * y_pred)
 
-    def compile_and_fit_GAN(self, d_learning_rate, g_learning_rate, beta_1, epochs):
+    def compile_and_fit_GAN(self, d_learning_rate: float, g_learning_rate: float, d_beta_1: float, g_beta_1:float, epochs: int):
         # beta_1 = 0.0  # according to the paper???
         # beta_2 = 0.9  # according to the paper???
         # beta_1 = 0.9  # default
@@ -263,6 +287,6 @@ class WCGAN_GP_pipeline(BasicGANPipeline):
         self.history = self.gan.fit(
             self.dataset,
             epochs=epochs,
-            verbose=1,
+            verbose=0,
         )
         return self.history

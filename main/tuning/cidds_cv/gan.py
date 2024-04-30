@@ -133,8 +133,8 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         model.add(
             layers.InputLayer(input_shape=(self.hp_latent_dim + self.num_classes - 1,))
         )
-        model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
-        model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
+        for _ in range(hp_hidden_layer_depth):
+            model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
 
         # * consider these two final layers as one layer
         model.add(layers.Dense(self.output_dim, activation=None))
@@ -154,8 +154,9 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         model.add(
             layers.InputLayer(input_shape=(self.output_dim + self.num_classes - 1,))
         )
-        model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
-        model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
+        for _ in range(hp_hidden_layer_depth):
+            model.add(layers.Dense(hp_hidden_layer_width, activation="relu"))
+
         model.add(layers.Dense(1, activation=None))  # linear because wasserstein loss
         return model
 
@@ -166,9 +167,9 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
         )
         logging.info("Compiled generator and discriminator models")
         logging.info("Generator summary:")
-        self.generator.summary()
+        self.generator.summary(print_fn=logging.info)
         logging.info("Discriminator summary:")
-        self.discriminator.summary()
+        self.discriminator.summary(print_fn=logging.info)
 
     def generate_fake_samples_without_labels(self, n_samples, labels):
         noise = tf.random.normal((n_samples, self.hp_latent_dim))
@@ -252,10 +253,10 @@ class CIDDS_WCGAN_GP(tf.keras.Model):
                 f"Generated {plausible_samples.shape[0]} plausible samples (retention score: {retention_score:.2f})"
             )
             if retention_score <= 0.01:
-                print("Generated less than 0.01 plausible samples!")
+                # print("Generated less than 0.01 plausible samples!")
                 logging.warning("Generated less than 0.01 plausible samples!")
                 # return a placeholder array filled with NaNs
-                return np.full((1, self.output_dim), np.nan)
+                return np.full((1, self.output_dim), np.nan), None
 
         retention_scores = np.array(retention_scores)
 

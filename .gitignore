@@ -158,3 +158,17 @@ jobs/
 
 # hyperparam tuning
 hp_tuning_*/
+
+# job results
+slurm-*.out
+
+# zip files 
+*.zip
+
+# files starting with X_y_2c
+X_y_2c*
+
+# the following files: X_encoders, y_encoder, X_colnames
+X_encoders
+y_encoder
+X_colnames
